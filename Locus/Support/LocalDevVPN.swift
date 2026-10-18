@@ -1,4 +1,3 @@
-import Darwin
 import Foundation
 import UIKit
 
@@ -11,18 +10,6 @@ enum LocalDevVPN {
 
     static var isInstalled: Bool {
         UIApplication.shared.canOpenURL(detectURL)
-    }
-
-    /// LocalDevVPN puts the tunnel network on a `10.7.0.x` (or custom) utun when connected.
-    static var isConnected: Bool {
-        let addresses = ipv4InterfaceAddresses()
-        let target = TunnelConfig.targetIP
-        if addresses.contains(target) { return true }
-
-        let parts = target.split(separator: ".")
-        guard parts.count == 4 else { return false }
-        let prefix = parts.dropLast().joined(separator: ".") + "."
-        return addresses.contains { $0.hasPrefix(prefix) }
     }
 
     static func openInstalled() {
@@ -42,32 +29,4 @@ enum LocalDevVPN {
         }
     }
 
-    private static func ipv4InterfaceAddresses() -> [String] {
-        var ifaddr: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return [] }
-        defer { freeifaddrs(ifaddr) }
-
-        var results: [String] = []
-        var ptr: UnsafeMutablePointer<ifaddrs>? = first
-        while let current = ptr {
-            let interface = current.pointee
-            if interface.ifa_addr.pointee.sa_family == UInt8(AF_INET) {
-                var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-                let nameLen = socklen_t(MemoryLayout<sockaddr_in>.size)
-                if getnameinfo(
-                    interface.ifa_addr,
-                    nameLen,
-                    &host,
-                    socklen_t(host.count),
-                    nil,
-                    0,
-                    NI_NUMERICHOST
-                ) == 0 {
-                    results.append(String(cString: host))
-                }
-            }
-            ptr = interface.ifa_next
-        }
-        return results
-    }
 }

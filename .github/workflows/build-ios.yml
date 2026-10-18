@@ -28,6 +28,11 @@ jobs:
           "$RUNNER_TEMP/movement-checks" 2>&1 | tee -a outputs/timing-checks.log
       - name: Build unsigned device IPA
         run: bash scripts/build-unsigned-ios.sh
+      - name: Check developer tunnel detection
+        run: |
+          set -euo pipefail
+          swiftc Locus/Engine/DeviceTunnel.swift Locus/Support/TunnelMonitor.swift Tests/TunnelMonitorChecks.swift -o "$RUNNER_TEMP/tunnel-checks" 2>&1 | tee outputs/tunnel-checks.log
+          "$RUNNER_TEMP/tunnel-checks" 2>&1 | tee -a outputs/tunnel-checks.log
       - name: Save IPA and build log
         if: always()
         uses: actions/upload-artifact@v4
@@ -37,5 +42,6 @@ jobs:
             outputs/Locus-personal-unsigned.ipa
             outputs/build.log
             outputs/timing-checks.log
+            outputs/tunnel-checks.log
           retention-days: 7
           if-no-files-found: error

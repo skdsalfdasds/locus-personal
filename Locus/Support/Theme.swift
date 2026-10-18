@@ -16,6 +16,26 @@ enum LocusGlassStyle {
     case interactive
 }
 
+/// Explicit enabled/disabled colors keep actions legible over a dark glass tray.
+struct LocusActionButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(isEnabled ? Color.black : Color.primary.opacity(0.75))
+            .padding(.vertical, 12)
+            .padding(.horizontal, 10)
+            .background {
+                Capsule().fill(isEnabled ? LocusTheme.accent : Color(uiColor: .tertiarySystemBackground))
+            }
+            .overlay {
+                Capsule().stroke(Color.primary.opacity(isEnabled ? 0 : 0.2), lineWidth: 1)
+            }
+            .contentShape(Capsule())
+            .opacity(configuration.isPressed && isEnabled ? 0.8 : 1)
+    }
+}
+
 /// Liquid Glass on iOS 26+; material fallback earlier.
 struct LocusGlassModifier<S: Shape>: ViewModifier {
     var style: LocusGlassStyle

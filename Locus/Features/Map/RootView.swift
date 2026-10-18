@@ -1,5 +1,4 @@
 import SwiftUI
-import NetworkExtension
 
 struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
@@ -46,18 +45,23 @@ struct StatusBarView: View {
     @EnvironmentObject private var session: SpoofSession
     @Environment(\.scenePhase) private var scenePhase
 
-    @State private var tunnelConnected = LocalDevVPN.isConnected
+    @StateObject private var tunnel = TunnelMonitor()
 
     private enum Display {
         case notSpoofing
         case connectVPN
+        case checking
         case status(String)
     }
 
     private var display: Display {
         switch session.status {
         case .idle:
-            return tunnelConnected ? .notSpoofing : .connectVPN
+            switch tunnel.status {
+            case .reachable: return .notSpoofing
+            case .unavailable: return .connectVPN
+            case .checking: return .checking
+            }
         case .connecting:
             return .status("Connecting…")
         case .active:
@@ -78,6 +82,8 @@ struct StatusBarView: View {
             return Color.primary.opacity(0.55)
         case .connectVPN:
             return LocusTheme.statusWarn
+        case .checking:
+            return Color.primary.opacity(0.55)
         case .status:
             switch session.status {
             case .active: return LocusTheme.statusGood
@@ -90,8 +96,9 @@ struct StatusBarView: View {
 
     private var title: String {
         switch display {
-        case .notSpoofing: return "Not Spoofing"
-        case .connectVPN: return "Connect LocalDevVPN"
+        case .notSpoofing: return "Tunnel ready · Choose a destination"
+        case .connectVPN: return "Tunnel not responding · Open VPN"
+        case .checking: return "Checking developer tunnel…"
         case .status(let text): return text
         }
     }
@@ -107,23 +114,22 @@ struct StatusBarView: View {
                 statusContent
             }
         }
-        .onAppear { refreshTunnel() }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { refreshTunnel() }
-        }
-        .onChange(of: session.status) { _, _ in
-            refreshTunnel()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .NEVPNStatusDidChange)) { _ in
-            // LocalDevVPN connection changes show up here even though we don’t own the VPN.
-            refreshTunnel()
-        }
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            defer { tunnel.stop() }
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                refreshTunnel()
+                if session.status == .idle {
+                    tunnel.check()
+                } else {
+                    // The engine's authenticated session is authoritative while active.
+                    tunnel.stop()
+                }
+                do { try await Task.sleep(nanoseconds: 5_000_000_000) }
+                catch { return }
             }
+        }
+        .onChange(of: session.status) { _, status in
+            if status != .idle { tunnel.stop() }
         }
     }
 
@@ -137,6 +143,7 @@ struct StatusBarView: View {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
+                .lineLimit(2)
 
             Spacer(minLength: 8)
 
@@ -158,9 +165,6 @@ struct StatusBarView: View {
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-    private func refreshTunnel() {
-        tunnelConnected = LocalDevVPN.isConnected
-    }
 }
 
 struct BottomControlsView: View {
@@ -234,9 +238,14 @@ struct BottomControlsView: View {
                 .disabled(session.pin == nil || session.isBusy)
             }
             .font(.subheadline.weight(.semibold))
-            .buttonStyle(.borderedProminent)
-            .tint(LocusTheme.accent)
-            .foregroundStyle(.black)
+            .buttonStyle(LocusActionButtonStyle())
+
+            if session.pin == nil {
+                Text("Choose an address or map point to enable Move and Teleport.")
+                    .font(.caption)
+                    .foregroundStyle(.primary.opacity(0.8))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             if session.routeRunning {
                 Button(session.routePaused ? "Resume movement" : "Pause movement") {

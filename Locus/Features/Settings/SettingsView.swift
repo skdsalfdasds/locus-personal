@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var showNameEasterEgg = false
     @State private var tunnelIP = TunnelConfig.targetIP
     @State private var localDevVPNInstalled = LocalDevVPN.isInstalled
+    @StateObject private var tunnel = TunnelMonitor()
     @Environment(\.scenePhase) private var scenePhase
 
     private var supportsOnDevicePairing: Bool {
@@ -70,13 +71,18 @@ struct SettingsView: View {
                         .autocorrectionDisabled()
                         .onSubmit {
                             TunnelConfig.setTargetIP(tunnelIP)
+                            tunnel.stop()
+                            if !session.isSpoofing { tunnel.check() }
                         }
                     LabeledContent("Status") {
-                        Text(LocalDevVPN.isConnected ? "Connected" : "Not connected")
-                            .foregroundStyle(LocalDevVPN.isConnected ? LocusTheme.statusGood : LocusTheme.statusWarn)
+                        Text(session.status == .active ? "Location session connected" : tunnel.status.title)
+                            .foregroundStyle(session.status == .active || tunnel.status == .reachable
+                                             ? LocusTheme.statusGood : LocusTheme.statusWarn)
                     }
                     Button("Save tunnel IP") {
                         TunnelConfig.setTargetIP(tunnelIP)
+                        tunnel.stop()
+                        if !session.isSpoofing { tunnel.check() }
                     }
                     Button {
                         if localDevVPNInstalled {
@@ -93,7 +99,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Tunnel")
                 } footer: {
-                    Text("Connect LocalDevVPN before teleporting. Default tunnel IP is 10.7.0.1. Start a spoof on Wi‑Fi first; it can keep working on cellular afterward.")
+                    Text("Connect LocalDevVPN before teleporting. Default tunnel IP is 10.7.0.1. Status checks the developer endpoint, not another app’s VPN switch. If it does not respond, check the IP and Local Network permission. Start on Wi‑Fi first.")
                 }
 
                 Section("Privacy") {
@@ -159,10 +165,26 @@ struct SettingsView: View {
             .onAppear {
                 localDevVPNInstalled = LocalDevVPN.isInstalled
             }
+            .task(id: scenePhase) {
+                guard scenePhase == .active else { return }
+                defer { tunnel.stop() }
+                while !Task.isCancelled {
+                    if session.status == .idle || session.status.isDropped {
+                        tunnel.check()
+                    } else {
+                        tunnel.stop()
+                    }
+                    do { try await Task.sleep(nanoseconds: 5_000_000_000) }
+                    catch { return }
+                }
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     localDevVPNInstalled = LocalDevVPN.isInstalled
                 }
+            }
+            .onChange(of: session.status) { _, status in
+                if status != .idle && !status.isDropped { tunnel.stop() }
             }
         }
     }
