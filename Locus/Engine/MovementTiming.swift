@@ -18,9 +18,15 @@ enum MovementTiming {
 
     static func etaLabel(seconds: TimeInterval) -> String {
         guard seconds.isFinite else { return "—" }
-        let minutes = max(0, Int(ceil(seconds / 60)))
-        if minutes == 0 { return "Arrived" }
-        if minutes < 60 { return "\(minutes) min" }
-        return "\(minutes / 60) hr \(minutes % 60) min"
+        let rounded = ceil(max(0, seconds))
+        guard rounded < Double(Int.max) else { return "—" }
+        let total = Int(rounded)
+        if total == 0 { return "Arrived" }
+        let hours = total / 3600
+        let minutes = total % 3600 / 60
+        let remainder = total % 60
+        if hours > 0 { return String(format: "%d hr %02d min %02d sec", hours, minutes, remainder) }
+        if minutes > 0 { return String(format: "%d min %02d sec", minutes, remainder) }
+        return "\(remainder) sec"
     }
 }

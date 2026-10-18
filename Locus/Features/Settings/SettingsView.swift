@@ -104,7 +104,7 @@ struct SettingsView: View {
 
                 Section("Background playback") {
                     Text("Start movement with Locus open, then lock the screen or switch apps. Keep LocalDevVPN connected and allow Location access to Always in iPhone Settings.")
-                    Text("Arrival holds the destination until Stop. Reopening restores a saved hold or resumes saved route progress. Swiping Locus away, restarting, or powering off can interrupt updates; the app cannot keep running after force quit.")
+                    Text("Stop ends movement and holds your current simulated position. Restore real location removes the override. Reopening restores a saved hold or resumes saved route progress. Swiping Locus away, restarting, or powering off can interrupt updates; the app cannot keep running after force quit.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

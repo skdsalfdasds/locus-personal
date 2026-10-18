@@ -67,10 +67,13 @@ enum LocationEngine {
         return result
     }
 
-    static func clear() -> Result<Void, LocationEngineError> {
+    static func clear(pairingPath: String, deviceIP: String) -> Result<Void, LocationEngineError> {
         var result: Result<Void, LocationEngineError> = .failure(.notActive)
         queue.sync {
-            let code = clearLocked()
+            // Reconnect without setting coordinates when restoring after a lost
+            // connection or app relaunch. Clearing never needs a new teleport.
+            let connected = connectLocked(pairingPath: pairingPath, deviceIP: deviceIP)
+            let code = connected == ok ? clearLocked() : connected
             result = code == ok ? .success(()) : .failure(.from(code: code))
         }
         return result
@@ -104,6 +107,20 @@ enum LocationEngine {
                 return ok
             }
         }
+
+        let connected = connectLocked(pairingPath: pairingPath, deviceIP: deviceIP)
+        guard connected == ok else { return connected }
+        guard let locationSimulation else { return simulationCreate }
+        if let setError = location_simulation_set(locationSimulation, latitude, longitude) {
+            idevice_error_free(setError)
+            cleanup()
+            return locationSet
+        }
+        return ok
+    }
+
+    private static func connectLocked(pairingPath: String, deviceIP: String) -> Int32 {
+        if locationSimulation != nil { return ok }
 
         var address = sockaddr_in()
         address.sin_family = sa_family_t(AF_INET)
@@ -153,11 +170,6 @@ enum LocationEngine {
         // location_simulation_new consumes/owns remote server lifecycle alongside handle
         remoteServer = nil
 
-        if let setError = location_simulation_set(locationSimulation, latitude, longitude) {
-            idevice_error_free(setError)
-            cleanup()
-            return locationSet
-        }
         return ok
     }
 

@@ -11,7 +11,8 @@ Playback uses actual segment distances rather than rounding every substep up to 
 fixed distance. A tunnel failure keeps the route cursor in place and retries instead
 of skipping ahead. After arrival or teleporting, the app resends its last position.
 The last confirmed coordinate is saved locally and reapplied when the app opens.
-Stop clears the saved hold target and requests restoration of real GPS.
+Stop ends movement and holds the last confirmed position. Restore real location
+clears the saved hold target and requests restoration of real GPS.
 
 The app's existing silent audio and background-location facilities are now connected
 to the movement session. This targets screen-locked use; it is not a guarantee of
@@ -34,7 +35,7 @@ for the build. The resulting IPA is unsigned and must be signed/sideloaded local
 5. Import your own RPPairing file and use LocalDevVPN, as described in SETUP.md.
 
 The workflow does not publish a release or upload Apple signing credentials.
-This derivative uses bundle identifier `com.locus.personal` and version 1.2.0.
+This derivative uses bundle identifier `com.locus.personal` and version 1.2.1.
 Public repositories with standard hosted runners have free Actions builds;
 private repositories use the account's Actions allowance and may incur charges.
 
@@ -46,7 +47,7 @@ session, lock-accessible pairing/audio files, audio route recovery, and common-m
 hold/retry timers improve operation while the screen is locked or another app is open.
 The route and last confirmed cursor are saved separately; reopening resumes saved
 progress without jumping ahead for time spent terminated. Arrival saves a persistent
-hold target, including retry intent if initial reconnection fails. Stop clears it.
+hold target, including retry intent if initial reconnection fails. Restore real location clears it.
 The full Release build, movement, tunnel, and saved-state checks passed:
 https://github.com/skdsalfdasds/locus-personal/actions/runs/39113203387
 Screen-lock, background duration, and Life360 behavior remain unverified on the phone.
@@ -71,7 +72,8 @@ No simulator or physical-iPhone behavior has been verified yet.
 The workflow includes executable checks for MPH units, ETA, and segment pacing.
 Device acceptance: address search and pin route previews; distance and ETA;
 Move vs Teleport; speed changes while moving; pause/resume; screen-lock playback;
-arrival hold; tunnel interruption/reconnection; Stop restoring actual GPS.
+arrival hold; tunnel interruption/reconnection; Stop holding the current point;
+Restore real location clearing the override.
 
 Local checks completed: all 10 new/modified Swift files parse without syntax errors;
 project/workflow YAML and resource plists parse; the build shell script passes Bash

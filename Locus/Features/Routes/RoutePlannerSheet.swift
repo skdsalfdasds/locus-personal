@@ -76,7 +76,7 @@ struct RoutePlannerSheet: View {
                 }
 
                 Section {
-                    Text("Routes follow Apple Maps roads/footpaths. The destination stays active after arrival until you Stop. Keep LocalDevVPN connected; background interruptions can pause movement.")
+                    Text("Routes follow Apple Maps roads/footpaths. Stop holds the current position; arrival holds the destination. Use Restore real location to remove the override. Keep LocalDevVPN connected; background interruptions can pause movement.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

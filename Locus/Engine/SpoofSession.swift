@@ -109,6 +109,7 @@ final class SpoofSession: ObservableObject {
     private let playbackStore = PlaybackStore()
     private var holdTarget: CLLocationCoordinate2D?
     private var nextWaypoint = 1
+    private var restorePending = false
 
     private let favoritesKey = "locus.favorites"
     private let recentsKey = "locus.recents"
@@ -127,7 +128,7 @@ final class SpoofSession: ObservableObject {
     }
 
     var hasLocationIntent: Bool {
-        routeRunning || joystickActive || holdTarget != nil || simulated != nil
+        routeRunning || joystickActive || holdTarget != nil || simulated != nil || restorePending
     }
 
     func teleport(to coordinate: CLLocationCoordinate2D, pairing: PairingStore) {
@@ -136,6 +137,7 @@ final class SpoofSession: ObservableObject {
             return
         }
         cancelMovement()
+        restorePending = false
         previewDistanceMeters = nil
         pin = coordinate
         holdTarget = coordinate
@@ -145,31 +147,52 @@ final class SpoofSession: ObservableObject {
     }
 
     func stop(pairing: PairingStore) {
+        // Stop at the last position confirmed by the engine, never at the route
+        // destination or a pending teleport that has not succeeded.
+        let current = simulated
         cancelMovement()
+        restorePending = false
+        previewDistanceMeters = nil
+        if let current {
+            holdTarget = current
+            playbackStore.setHold(Self.storedPoint(current))
+            prepareForBackground(pairing: pairing)
+            holdingDestination = apply(current, pairing: pairing, markRecent: false)
+        } else {
+            holdTarget = nil
+            holdingDestination = false
+            playbackStore.clear()
+            stopResend()
+            stopHealth()
+            endBackground()
+            status = .idle
+            lastError = nil
+        }
+    }
+
+    func restoreRealLocation(pairing: PairingStore) {
+        cancelMovement()
+        restorePending = true
         holdingDestination = false
         holdTarget = nil
         playbackStore.clear()
         stopResend()
         stopHealth()
-        if simulated == nil, !LocationEngine.isSessionActive {
-            status = .idle
-            lastError = nil
-            endBackground()
-            return
-        }
+        endBackground()
         isBusy = true
-        let result = LocationEngine.clear()
+        let result = LocationEngine.clear(pairingPath: pairing.pairingPath, deviceIP: TunnelConfig.targetIP)
         isBusy = false
         switch result {
         case .success:
             simulated = nil
+            restorePending = false
             status = .idle
-            endBackground()
+            lastError = nil
             // Keep location updates running so the map puck / locate button
             // can return to the real GPS fix (not the leftover pin).
             locationKeeper.start()
         case .failure(let error):
-            lastError = error.localizedDescription
+            lastError = "Could not restore real location: \(error.localizedDescription) Keep LocalDevVPN connected and retry. If it still fails, restart the iPhone."
             status = .dropped(error.localizedDescription)
             postDropNotification(error.localizedDescription)
         }
@@ -197,6 +220,7 @@ final class SpoofSession: ObservableObject {
         }
         cancelMovement()
         playbackStore.clearRoute()
+        restorePending = false
         holdTarget = nil
         holdingDestination = false
         if simulated == nil {
@@ -239,6 +263,7 @@ final class SpoofSession: ObservableObject {
         }
         cancelMovement()
         let currentRouteID = routeID
+        restorePending = false
         routeRunning = true
         routePaused = initiallyPaused
         nextWaypoint = 1
@@ -316,7 +341,7 @@ final class SpoofSession: ObservableObject {
     }
 
     func refreshAfterForeground(pairing: PairingStore) {
-        guard pairing.hasPairingFile else { return }
+        guard pairing.hasPairingFile, !restorePending else { return }
         if routeRunning || joystickActive {
             prepareForBackground(pairing: pairing)
             if let current = simulated {
@@ -340,7 +365,7 @@ final class SpoofSession: ObservableObject {
     }
 
     func prepareForBackground(pairing: PairingStore) {
-        guard hasLocationIntent else { return }
+        guard hasLocationIntent, !restorePending else { return }
         saveRouteCheckpoint(force: true)
         beginBackground()
         startResend(pairing: pairing)

@@ -303,7 +303,23 @@ struct BottomControlsView: View {
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityHint("Stop movement and hold the current simulated location")
                 }
+            }
+
+            if session.hasLocationIntent {
+                Button {
+                    session.restoreRealLocation(pairing: pairing)
+                } label: {
+                    Label("Restore real location", systemImage: "location.slash")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(Capsule().fill(Color.primary.opacity(0.08)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Remove the simulated location and stop automatic restoration")
             }
         }
         .padding(14)

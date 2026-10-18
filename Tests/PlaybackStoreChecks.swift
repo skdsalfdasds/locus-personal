@@ -23,16 +23,24 @@ struct PlaybackStoreChecks {
         precondition(recovery.paused)
         print("PASS: reopening resumes from confirmed progress and preserves pause")
 
-        reopened.setHold(destination)
+        // Stop holds confirmed in-flight progress without jumping to the destination.
+        reopened.setHold(confirmed)
+        let stopped = PlaybackStore(defaults: defaults)
+        precondition(stopped.recoverRoute() == nil)
+        precondition(stopped.hold == confirmed && stopped.hold != destination)
+        print("PASS: stopping mid-route persists the current point, not the destination")
+
+        stopped.beginRoute([confirmed, destination], paused: false)
+        stopped.setHold(destination)
         let afterArrival = PlaybackStore(defaults: defaults)
         precondition(afterArrival.recoverRoute() == nil)
         precondition(afterArrival.hold == destination)
         print("PASS: arrival persists destination hold and retires route")
 
         afterArrival.clear()
-        let afterStop = PlaybackStore(defaults: defaults)
-        precondition(afterStop.recoverRoute() == nil && afterStop.hold == nil)
-        print("PASS: Stop removes all automatic restoration intent")
+        let afterRestore = PlaybackStore(defaults: defaults)
+        precondition(afterRestore.recoverRoute() == nil && afterRestore.hold == nil)
+        print("PASS: restoring real location removes all automatic restoration intent")
 
         store.beginRoute([start, middle], paused: false)
         store.checkpoint(position: start, nextWaypoint: 99, paused: false, force: true)

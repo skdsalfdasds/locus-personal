@@ -13,8 +13,16 @@ struct MovementTimingChecks {
         close(MovementTiming.duration(distanceMeters: 0, mph: 30), 0, "Arrival")
         close(MovementTiming.duration(distanceMeters: 229492.4544, mph: 60), 8556, "142.6 mile route ETA")
         precondition(MovementTiming.etaLabel(seconds: 0) == "Arrived")
-        precondition(MovementTiming.etaLabel(seconds: 61) == "2 min")
-        precondition(MovementTiming.etaLabel(seconds: 3660) == "1 hr 1 min")
+        precondition(MovementTiming.etaLabel(seconds: -1) == "Arrived")
+        precondition(MovementTiming.etaLabel(seconds: 0.1) == "1 sec")
+        precondition(MovementTiming.etaLabel(seconds: 59) == "59 sec")
+        precondition(MovementTiming.etaLabel(seconds: 60) == "1 min 00 sec")
+        precondition(MovementTiming.etaLabel(seconds: 61) == "1 min 01 sec")
+        precondition(MovementTiming.etaLabel(seconds: 3599) == "59 min 59 sec")
+        precondition(MovementTiming.etaLabel(seconds: 3600) == "1 hr 00 min 00 sec")
+        precondition(MovementTiming.etaLabel(seconds: 3661) == "1 hr 01 min 01 sec")
+        precondition(MovementTiming.etaLabel(seconds: .infinity) == "—")
+        precondition(MovementTiming.etaLabel(seconds: .nan) == "—")
         print("Movement timing checks passed")
     }
 }
