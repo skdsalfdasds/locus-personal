@@ -61,8 +61,8 @@ struct SettingsView: View {
                     Text("Developer pairing")
                 } footer: {
                     Text(supportsOnDevicePairing
-                         ? "On iOS 27, use Pair on this iPhone — no computer. Locus advertises a pairable host; confirm the 6-digit code under Settings › Privacy & Security › Developer Mode › Pair with Host. On older iOS, import an RPPairing file from idevice_pair (not a SideStore lockdown .mobiledevicepairing). LiveContainer: enable Fix File Picker on Locus, or use Paste / Share → LiveContainer → Locus."
-                         : "Import an RPPairing file from idevice_pair (not a SideStore lockdown .mobiledevicepairing). If the file picker fails (common in LiveContainer), enable Fix File Picker on the app, share the file into LiveContainer → Locus, or copy the plist and use Paste.")
+                         ? "On iOS 27, use Pair on this iPhone — no computer. Waypoint advertises a pairable host; confirm the 6-digit code under Settings › Privacy & Security › Developer Mode › Pair with Host. On older iOS, import an RPPairing file from idevice_pair (not a SideStore lockdown .mobiledevicepairing). LiveContainer: enable Fix File Picker on Waypoint, or use Paste / Share → LiveContainer → Waypoint."
+                         : "Import an RPPairing file from idevice_pair (not a SideStore lockdown .mobiledevicepairing). If the file picker fails (common in LiveContainer), enable Fix File Picker on the app, share the file into LiveContainer → Waypoint, or copy the plist and use Paste.")
                 }
 
                 Section {
@@ -103,14 +103,14 @@ struct SettingsView: View {
                 }
 
                 Section("Background playback") {
-                    Text("Start movement with Locus open, then lock the screen or switch apps. Keep LocalDevVPN connected and allow Location access to Always in iPhone Settings.")
-                    Text("Stop ends movement and holds your current simulated position. Restore real location removes the override. Reopening restores a saved hold or resumes saved route progress. Swiping Locus away, restarting, or powering off can interrupt updates; the app cannot keep running after force quit.")
+                    Text("Start movement with Waypoint open, then lock the screen or switch apps. Keep LocalDevVPN connected and allow Location access to Always in iPhone Settings.")
+                    Text("Stop ends movement and holds your current simulated position. Restore real location removes the override. Reopening restores a saved hold or resumes saved route progress. Swiping Waypoint away, restarting, or powering off can interrupt updates; the app cannot keep running after force quit.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
 
                 Section("Privacy") {
-                    Text("Fully on-device. Favorites and recents stay in UserDefaults. No analytics, no accounts, nothing uploaded.")
+                    Text("Favorites and pairing files stay on this device. Apple Maps receives address searches and route endpoints, including short sections used for traffic estimates. No analytics.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -118,7 +118,7 @@ struct SettingsView: View {
                 Section("About") {
                     LabeledContent("Version", value: appVersion)
                     LabeledContent("Engine", value: "idevice DVT location simulation")
-                    Text("Locus is free and open source (MIT). Location injection uses the MIT-licensed idevice FFI.")
+                    Text("Waypoint is a free, open-source derivative of Locus (MIT). Location injection uses the MIT-licensed idevice FFI.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -127,7 +127,7 @@ struct SettingsView: View {
                     Button {
                         showNameEasterEgg = true
                     } label: {
-                        Text("locus, n. — a place. From the Latin for where you are.")
+                        Text("Based on Locus · MIT licensed")
                             .font(.footnote.italic())
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)

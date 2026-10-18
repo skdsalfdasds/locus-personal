@@ -458,6 +458,7 @@ struct MapHomeView: View {
         session.previewIsRouting = true
         session.previewDistanceMeters = nil
         session.previewAutomaticEstimate = nil
+        session.previewAutomaticProfile = nil
         let mode = session.travelMode
         Task {
             do {
@@ -468,6 +469,7 @@ struct MapHomeView: View {
                     routeCoords = coords
                     isCustomRoute = false
                     session.previewAutomaticEstimate = plan.automaticEstimate
+                    session.previewAutomaticProfile = plan.automaticProfile
                     routePreviewConsumed = false
                     isRouting = false
                     session.previewIsRouting = false
@@ -499,6 +501,7 @@ struct MapHomeView: View {
             session.previewIsRouting = false
             session.previewDistanceMeters = nil
             session.previewAutomaticEstimate = nil
+            session.previewAutomaticProfile = nil
             return
         }
         if !force, let end = routeEnd, routeCoords.count > 1,
@@ -510,6 +513,7 @@ struct MapHomeView: View {
         routeEnd = destination
         session.previewDistanceMeters = nil
         session.previewAutomaticEstimate = nil
+        session.previewAutomaticProfile = nil
         isRouting = false
         session.previewIsRouting = false
         guard let start = session.simulated ?? session.realCoordinate else { return }
@@ -583,7 +587,8 @@ struct MapHomeView: View {
             return
         }
         showRouteSheet = false
-        session.followRoute(path, pairing: pairing, estimate: isCustomRoute ? nil : session.previewAutomaticEstimate)
+        session.followRoute(path, pairing: pairing, estimate: isCustomRoute ? nil : session.previewAutomaticEstimate,
+                            profile: isCustomRoute ? nil : session.previewAutomaticProfile)
         if session.routeRunning { routePreviewConsumed = true }
     }
 
@@ -615,7 +620,7 @@ struct MapHomeView: View {
             return
         }
         let gpx = GPXCodec.export(path)
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Locus-Route.gpx")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("Waypoint-Route.gpx")
         do {
             try gpx.data(using: .utf8)?.write(to: url)
             let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)

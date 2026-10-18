@@ -4,8 +4,6 @@ import Foundation
 /// Curvature adds a gentle slowdown; this is not a road-speed-limit model.
 struct SpeedVariation {
     private(set) var metersPerSecond: Double?
-    private static let acceleration = 0.35
-    private static let braking = 0.55
 
     static func multiplier(elapsed: TimeInterval, bendSeverity: Double) -> Double {
         let time = elapsed.isFinite ? max(0, elapsed) : 0
@@ -15,16 +13,17 @@ struct SpeedVariation {
     }
 
     mutating func duration(distanceMeters: Double, baseMPH: Double, elapsed: TimeInterval,
-                           bendSeverity: Double, enabled: Bool) -> TimeInterval {
+                           bendSeverity: Double, enabled: Bool,
+                           smoothTransitions: Bool = false) -> TimeInterval {
         let base = MovementTiming.metersPerSecond(mph: baseMPH)
         let target = base * (enabled ? Self.multiplier(elapsed: elapsed, bendSeverity: bendSeverity) : 1)
         let start = metersPerSecond ?? base
         guard distanceMeters > 0 else { return 0 }
-        guard enabled, abs(target - start) > 0.000001 else {
+        guard enabled || smoothTransitions, abs(target - start) > 0.000001 else {
             metersPerSecond = target
             return distanceMeters / target
         }
-        let rate = target > start ? Self.acceleration : -Self.braking
+        let rate = target > start ? MovementTiming.paceAcceleration : -MovementTiming.paceBraking
         let rampTime = (target - start) / rate
         let rampDistance = (start + target) * 0.5 * rampTime
         if distanceMeters < rampDistance {
@@ -45,7 +44,7 @@ struct SpeedVariation {
             return target
         }
         let start = metersPerSecond ?? base
-        let limit = (target > start ? Self.acceleration : Self.braking) * interval
+        let limit = (target > start ? MovementTiming.paceAcceleration : MovementTiming.paceBraking) * interval
         let end = start + min(limit, max(-limit, target - start))
         metersPerSecond = end
         return (start + end) * 0.5

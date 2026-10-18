@@ -159,7 +159,7 @@ private struct MovementOptionsSheet: View {
                         Text(reason).font(.footnote)
                         Text(session.requiresRestoreRetry
                              ? "Restoration failed. Retry from More options; your previous hold will not restart automatically."
-                             : "Your route and location are saved. Locus retries without sending a restore command.")
+                             : "Your route and location are saved. Waypoint retries without sending a restore command.")
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                 }

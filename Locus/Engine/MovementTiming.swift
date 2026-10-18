@@ -3,6 +3,8 @@ import Foundation
 /// Shared units and pacing used by playback, the speed control, and ETA.
 enum MovementTiming {
     static let metersPerMile = 1609.344
+    static let paceAcceleration = 0.35
+    static let paceBraking = 0.55
 
     static func metersPerSecond(mph: Double) -> Double {
         max(0.1, mph.isFinite ? mph : 1) * metersPerMile / 3600

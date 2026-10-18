@@ -23,6 +23,7 @@ final class PlaybackStore {
         let remaining: [Point]
         let paused: Bool
         let automaticEstimate: AutomaticTravel.Estimate?
+        let automaticProfile: AutomaticPacing.Profile?
     }
 
     private let defaults: UserDefaults
@@ -30,16 +31,19 @@ final class PlaybackStore {
     private let progressKey = "locus.resumeRouteProgress"
     private let holdKey = "locus.holdCoordinate"
     private let automaticKey = "locus.resumeAutomaticEstimate"
+    private let profileKey = "locus.resumeAutomaticProfile"
     private var lastCheckpoint = Date.distantPast
 
     init(defaults: UserDefaults = .standard) { self.defaults = defaults }
 
-    func beginRoute(_ points: [Point], paused: Bool, automaticEstimate: AutomaticTravel.Estimate? = nil) {
+    func beginRoute(_ points: [Point], paused: Bool, automaticEstimate: AutomaticTravel.Estimate? = nil,
+                    automaticProfile: AutomaticPacing.Profile? = nil) {
         clearRoute()
         guard points.count >= 2, points.allSatisfy(\.isValid),
               let data = try? JSONEncoder().encode(points) else { return }
         defaults.set(data, forKey: planKey)
         saveAutomaticEstimate(automaticEstimate)
+        saveAutomaticProfile(automaticProfile)
         checkpoint(position: points[0], nextWaypoint: 1, paused: paused, force: true)
     }
 
@@ -61,8 +65,20 @@ final class PlaybackStore {
         let automatic = defaults.data(forKey: automaticKey).flatMap {
             try? JSONDecoder().decode(AutomaticTravel.Estimate.self, from: $0)
         }
+        let profile = defaults.data(forKey: profileKey).flatMap {
+            try? JSONDecoder().decode(AutomaticPacing.Profile.self, from: $0)
+        }
         return Recovery(remaining: [progress.position] + plan.dropFirst(progress.nextWaypoint),
-                        paused: progress.paused, automaticEstimate: automatic)
+                        paused: progress.paused, automaticEstimate: automatic,
+                        automaticProfile: automatic != nil && profile?.isValid == true ? profile : nil)
+    }
+
+    func saveAutomaticProfile(_ profile: AutomaticPacing.Profile?) {
+        if let profile, profile.isValid, let data = try? JSONEncoder().encode(profile) {
+            defaults.set(data, forKey: profileKey)
+        } else {
+            defaults.removeObject(forKey: profileKey)
+        }
     }
 
     func saveAutomaticEstimate(_ estimate: AutomaticTravel.Estimate?) {
@@ -89,6 +105,7 @@ final class PlaybackStore {
         defaults.removeObject(forKey: progressKey)
         defaults.removeObject(forKey: planKey)
         defaults.removeObject(forKey: automaticKey)
+        defaults.removeObject(forKey: profileKey)
         lastCheckpoint = .distantPast
     }
 

@@ -82,11 +82,20 @@ final class SpoofSession: ObservableObject {
             automaticRefreshTask = nil
             automaticEstimate = nil
             previewAutomaticEstimate = nil
+            automaticProfile = nil
+            previewAutomaticProfile = nil
             if travelMode == .automatic {
-                if routeRunning { startAutomaticUpdates() }
+                if routeRunning {
+                    automaticProfile = RouteBuilder.automaticProfile(for: remainingRouteCoordinates)
+                    playbackStore.saveAutomaticProfile(automaticProfile)
+                    startAutomaticUpdates()
+                }
             } else {
                 speedMPH = travelMode.baseSpeed / 0.44704
-                if routeRunning { playbackStore.saveAutomaticEstimate(nil) }
+                if routeRunning {
+                    playbackStore.saveAutomaticEstimate(nil)
+                    playbackStore.saveAutomaticProfile(nil)
+                }
             }
         }
     }
@@ -96,6 +105,8 @@ final class SpoofSession: ObservableObject {
     @Published var variesSpeed = true
     @Published var previewAutomaticEstimate: AutomaticTravel.Estimate?
     @Published private(set) var automaticEstimate: AutomaticTravel.Estimate?
+    @Published var previewAutomaticProfile: AutomaticPacing.Profile?
+    @Published private(set) var automaticProfile: AutomaticPacing.Profile?
     @Published private(set) var routeRunning = false
     @Published private(set) var routePaused = false
     @Published private(set) var routeRemainingMeters: Double = 0
@@ -157,7 +168,34 @@ final class SpoofSession: ObservableObject {
     }
 
     var effectiveSpeedMPH: Double {
-        travelMode == .automatic ? (currentAutomaticEstimate?.targetMPH ?? speedMPH) : speedMPH
+        guard travelMode == .automatic else { return speedMPH }
+        let fallback = currentAutomaticEstimate?.targetMPH ?? speedMPH
+        return currentAutomaticProfile?.targetMPH(at: automaticRemainingMeters, fallbackMPH: fallback) ?? fallback
+    }
+
+    private var currentAutomaticProfile: AutomaticPacing.Profile? {
+        routeRunning ? automaticProfile : previewAutomaticProfile
+    }
+
+    private var automaticRemainingMeters: Double {
+        routeRunning ? routeRemainingMeters : (previewDistanceMeters ?? previewAutomaticProfile?.totalMeters ?? 0)
+    }
+
+    var automaticPaceStatus: String {
+        guard let profile = currentAutomaticProfile, let index = profile.index(at: automaticRemainingMeters),
+              let estimate = profile.sections[index].estimate else {
+            return "Route average · local traffic unavailable"
+        }
+        return Date().timeIntervalSince(estimate.fetchedAt) >= AutomaticTravel.refreshInterval
+            ? "Cached traffic estimate for this section" : "Traffic estimate for this section"
+    }
+
+    func estimatedTravelSeconds(distanceMeters: Double) -> TimeInterval {
+        let fallback = currentAutomaticEstimate?.targetMPH ?? speedMPH
+        if travelMode == .automatic, let profile = currentAutomaticProfile {
+            return profile.remainingSeconds(distanceMeters, fallbackMPH: fallback)
+        }
+        return MovementTiming.duration(distanceMeters: distanceMeters, mph: effectiveSpeedMPH)
     }
 
     var speedLabel: String {
@@ -174,6 +212,7 @@ final class SpoofSession: ObservableObject {
             speedMPH = manualSpeed
         }
         previewAutomaticEstimate = nil
+        previewAutomaticProfile = nil
     }
 
     func teleport(to coordinate: CLLocationCoordinate2D, pairing: PairingStore) {
@@ -300,7 +339,8 @@ final class SpoofSession: ObservableObject {
 
     func followRoute(_ coordinates: [CLLocationCoordinate2D], pairing: PairingStore,
                      restoring: Bool = false, initiallyPaused: Bool = false,
-                     estimate: AutomaticTravel.Estimate? = nil) {
+                     estimate: AutomaticTravel.Estimate? = nil,
+                     profile: AutomaticPacing.Profile? = nil) {
         guard pairing.hasPairingFile else {
             lastError = "Import an RPPairing file in Settings first."
             return
@@ -326,12 +366,13 @@ final class SpoofSession: ObservableObject {
         nextWaypoint = 1
         activeRouteCoordinates = coordinates
         automaticEstimate = travelMode == .automatic ? estimate : nil
+        automaticProfile = travelMode == .automatic ? (profile ?? RouteBuilder.automaticProfile(for: coordinates)) : nil
         previewDistanceMeters = nil
         holdTarget = nil
         holdingDestination = false
         routeRemainingMeters = RouteBuilder.distance(coordinates)
         playbackStore.beginRoute(coordinates.map(Self.storedPoint), paused: initiallyPaused,
-                                 automaticEstimate: automaticEstimate)
+                                 automaticEstimate: automaticEstimate, automaticProfile: automaticProfile)
         prepareForBackground(pairing: pairing)
         if travelMode == .automatic { startAutomaticUpdates() }
         routeTask = Task { [weak self] in
@@ -375,7 +416,8 @@ final class SpoofSession: ObservableObject {
                     )
                     let delay = variation.duration(distanceMeters: distance / Double(steps),
                                                    baseMPH: self.effectiveSpeedMPH, elapsed: movingTime,
-                                                   bendSeverity: bend, enabled: self.variesSpeed)
+                                                   bendSeverity: bend, enabled: self.variesSpeed,
+                                                   smoothTransitions: self.travelMode == .automatic)
                     do { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) } catch { return }
                     while self.routePaused {
                         do { try await Task.sleep(nanoseconds: 200_000_000) } catch { return }
@@ -402,7 +444,7 @@ final class SpoofSession: ObservableObject {
     }
 
     var routeETA: TimeInterval {
-        MovementTiming.duration(distanceMeters: routeRemainingMeters, mph: effectiveSpeedMPH)
+        estimatedTravelSeconds(distanceMeters: routeRemainingMeters)
     }
 
     func toggleRoutePause() {
@@ -429,7 +471,7 @@ final class SpoofSession: ObservableObject {
                 useManualModeForCustomPath()
             }
             followRoute(coordinates, pairing: pairing, restoring: true, initiallyPaused: savedRoute.paused,
-                        estimate: savedRoute.automaticEstimate)
+                        estimate: savedRoute.automaticEstimate, profile: savedRoute.automaticProfile)
         } else if let saved = playbackStore.hold {
             holdTarget = CLLocationCoordinate2D(latitude: saved.latitude, longitude: saved.longitude)
             prepareForBackground(pairing: pairing)
@@ -478,24 +520,51 @@ final class SpoofSession: ObservableObject {
         let currentRouteID = routeID
         automaticRefreshTask = Task { [weak self] in
             guard let self else { return }
+            var gate = AutomaticPacing.RefreshGate()
+            // Route preview just requested an ETA; give it breathing room.
+            gate.succeeded(at: Date())
             while !Task.isCancelled, self.routeID == currentRouteID, self.routeRunning,
                   self.travelMode == .automatic {
-                let expired = self.automaticEstimate.map {
-                    Date().timeIntervalSince($0.fetchedAt) >= AutomaticTravel.refreshInterval
-                } ?? true
-                if expired, !self.routePaused, self.routeRemainingMeters > 1,
-                   let current = self.simulated, let end = self.activeRouteCoordinates.last {
+                let now = Date()
+                let canRequest = gate.allows(now) && !self.routePaused && self.routeRemainingMeters > 1
+                if canRequest, self.automaticEstimate != nil, let profile = self.automaticProfile,
+                   let index = profile.requestIndex(at: self.routeRemainingMeters, now: now) {
+                    let section = profile.sections[index]
+                    let untilSection = max(0, profile.remainingSeconds(self.routeRemainingMeters,
+                                                                      fallbackMPH: self.automaticEstimate!.targetMPH)
+                        - profile.remainingSeconds(section.upperRemaining, fallbackMPH: self.automaticEstimate!.targetMPH))
+                    do {
+                        let estimate = try await RouteBuilder.sectionTrafficEstimate(section,
+                            departureDate: now.addingTimeInterval(untilSection))
+                        guard !Task.isCancelled, self.routeID == currentRouteID, self.travelMode == .automatic else { return }
+                        self.automaticProfile?.sections[index].estimate = estimate
+                        self.automaticProfile?.sections[index].retryAfter = nil
+                        self.playbackStore.saveAutomaticProfile(self.automaticProfile)
+                        gate.succeeded(at: Date())
+                    } catch {
+                        guard !Task.isCancelled, self.routeID == currentRouteID, self.travelMode == .automatic else { return }
+                        gate.failed(at: Date())
+                        self.automaticProfile?.sections[index].retryAfter = gate.nextRequest
+                        self.playbackStore.saveAutomaticProfile(self.automaticProfile)
+                    }
+                } else if canRequest, self.automaticEstimate.map({
+                    now.timeIntervalSince($0.fetchedAt) >= AutomaticTravel.refreshInterval
+                }) ?? true, let current = self.simulated, let end = self.activeRouteCoordinates.last {
                     do {
                         let estimate = try await RouteBuilder.trafficEstimate(
                             from: current, to: end, distanceMeters: self.routeRemainingMeters)
                         guard !Task.isCancelled, self.routeID == currentRouteID, self.travelMode == .automatic else { return }
                         self.automaticEstimate = estimate
                         self.playbackStore.saveAutomaticEstimate(estimate)
+                        gate.succeeded(at: Date())
                     } catch {
-                        // An internet outage keeps the cached speed and route running.
+                        guard !Task.isCancelled else { return }
+                        gate.failed(at: Date())
                     }
                 }
-                do { try await Task.sleep(nanoseconds: 60_000_000_000) }
+                // Cached local estimates (or route average for unknown sections)
+                // keep playback running through offline/throttled requests.
+                do { try await Task.sleep(nanoseconds: 10_000_000_000) }
                 catch { return }
             }
         }
@@ -731,7 +800,7 @@ final class SpoofSession: ObservableObject {
     private func postDropNotification(_ message: String, restoring: Bool = false) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         let content = UNMutableNotificationContent()
-        content.title = restoring ? "Location restore failed" : "Locus connection interrupted"
+        content.title = restoring ? "Location restore failed" : "Waypoint connection interrupted"
         content.body = restoring ? message : "Saved location kept. Retrying the developer tunnel. \(message)"
         content.sound = .default
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)

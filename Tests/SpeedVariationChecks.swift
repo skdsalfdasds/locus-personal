@@ -43,6 +43,16 @@ struct SpeedVariationChecks {
         precondition(abs(a * 6 - b) < 0.000001)
         print("PASS: variation off preserves exact manual timing; sampling does not set the variation rate")
 
+        var automatic = SpeedVariation()
+        _ = automatic.duration(distanceMeters: 2, baseMPH: 60, elapsed: 0,
+                               bendSeverity: 0, enabled: false, smoothTransitions: true)
+        let before = automatic.metersPerSecond!
+        let brakingTime = automatic.duration(distanceMeters: 2, baseMPH: 10, elapsed: 1,
+                                              bendSeverity: 0, enabled: false, smoothTransitions: true)
+        precondition(automatic.metersPerSecond! < before)
+        precondition(abs((automatic.metersPerSecond! - before) / brakingTime + 0.55) < 0.000001)
+        print("PASS: Automatic traffic transitions remain gradual with optional variation switched off")
+
         var joystick = SpeedVariation()
         var priorJoystick = MovementTiming.metersPerSecond(mph: 30)
         for tick in 0..<400 {

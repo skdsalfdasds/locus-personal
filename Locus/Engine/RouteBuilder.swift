@@ -6,6 +6,7 @@ enum RouteBuilder {
     struct Plan {
         let coordinates: [CLLocationCoordinate2D]
         let automaticEstimate: AutomaticTravel.Estimate?
+        let automaticProfile: AutomaticPacing.Profile?
     }
     static func distance(_ coordinates: [CLLocationCoordinate2D]) -> CLLocationDistance {
         zip(coordinates, coordinates.dropFirst()).reduce(0) { total, pair in
@@ -35,21 +36,63 @@ enum RouteBuilder {
         // ETAResponse explicitly includes expected traffic; request that separately.
         let estimate = mode == .automatic
             ? try await trafficEstimate(from: start, to: end, distanceMeters: distance(coordinates)) : nil
-        return Plan(coordinates: coordinates, automaticEstimate: estimate)
+        var profile = mode == .automatic ? automaticProfile(for: coordinates) : nil
+        if let estimate, var local = profile, !local.sections.isEmpty {
+            if local.sections.count == 1 {
+                local.sections[0].estimate = estimate
+            } else {
+                do { local.sections[0].estimate = try await sectionTrafficEstimate(local.sections[0]) }
+                catch {
+                    try Task.checkCancellation()
+                    local.sections[0].retryAfter = Date().addingTimeInterval(60)
+                }
+            }
+            profile = local
+        }
+        try Task.checkCancellation()
+        return Plan(coordinates: coordinates, automaticEstimate: estimate, automaticProfile: profile)
     }
 
     static func trafficEstimate(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D,
-                                distanceMeters: Double) async throws -> AutomaticTravel.Estimate {
+                                distanceMeters: Double, matchingDistance: Bool = false,
+                                departureDate: Date = Date()) async throws -> AutomaticTravel.Estimate {
         let request = MKDirections.Request()
         request.source = MKMapItem(placemark: MKPlacemark(coordinate: start))
         request.destination = MKMapItem(placemark: MKPlacemark(coordinate: end))
         request.transportType = .automobile
-        request.departureDate = Date()
+        request.departureDate = departureDate
         let eta = try await MKDirections(request: request).calculateETA()
+        try Task.checkCancellation()
+        if matchingDistance, !AutomaticPacing.acceptsDistance(pathMeters: distanceMeters, etaMeters: eta.distance) {
+            throw NSError(domain: "Locus", code: 4, userInfo: [NSLocalizedDescriptionKey: "The traffic estimate used a different path. Keeping the cached pace for this section."])
+        }
         guard let estimate = AutomaticTravel.estimate(distanceMeters: distanceMeters, seconds: eta.expectedTravelTime) else {
             throw NSError(domain: "Locus", code: 3, userInfo: [NSLocalizedDescriptionKey: "Apple Maps did not return a usable traffic estimate. Try again or choose Drive for manual speed."])
         }
         return estimate
+    }
+
+    static func sectionTrafficEstimate(_ section: AutomaticPacing.Section,
+                                       departureDate: Date = Date()) async throws -> AutomaticTravel.Estimate {
+        try await trafficEstimate(
+            from: CLLocationCoordinate2D(latitude: section.start.latitude, longitude: section.start.longitude),
+            to: CLLocationCoordinate2D(latitude: section.end.latitude, longitude: section.end.longitude),
+            distanceMeters: section.distanceMeters, matchingDistance: true, departureDate: departureDate)
+    }
+
+    static func automaticProfile(for coordinates: [CLLocationCoordinate2D]) -> AutomaticPacing.Profile? {
+        guard let first = coordinates.first else { return nil }
+        var cumulative = [0.0]
+        var previous = first
+        for coordinate in coordinates.dropFirst() {
+            let distance = CLLocation(latitude: previous.latitude, longitude: previous.longitude)
+                .distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
+            cumulative.append(cumulative.last! + distance)
+            previous = coordinate
+        }
+        return AutomaticPacing.makeProfile(locations: coordinates.map {
+            AutomaticPacing.Location(latitude: $0.latitude, longitude: $0.longitude)
+        }, cumulativeMeters: cumulative)
     }
 
     static func sample(polyline: MKPolyline, every meters: CLLocationDistance) -> [CLLocationCoordinate2D] {
@@ -114,10 +157,10 @@ enum GPXCodec {
         return coords
     }
 
-    static func export(_ coordinates: [CLLocationCoordinate2D], name: String = "Locus Route") -> String {
+    static func export(_ coordinates: [CLLocationCoordinate2D], name: String = "Waypoint Route") -> String {
         var body = """
         <?xml version="1.0" encoding="UTF-8"?>
-        <gpx version="1.1" creator="Locus" xmlns="http://www.topografix.com/GPX/1/1">
+        <gpx version="1.1" creator="Waypoint" xmlns="http://www.topografix.com/GPX/1/1">
           <trk>
             <name>\(name)</name>
             <trkseg>

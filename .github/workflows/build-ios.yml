@@ -45,13 +45,18 @@ jobs:
       - name: Check saved route and hold recovery
         run: |
           set -euo pipefail
-          swiftc Locus/Engine/AutomaticTravel.swift Locus/Engine/PlaybackStore.swift Tests/PlaybackStoreChecks.swift -o "$RUNNER_TEMP/playback-checks" 2>&1 | tee outputs/playback-checks.log
+          swiftc Locus/Engine/MovementTiming.swift Locus/Engine/AutomaticTravel.swift Locus/Engine/AutomaticPacing.swift Locus/Engine/PlaybackStore.swift Tests/PlaybackStoreChecks.swift -o "$RUNNER_TEMP/playback-checks" 2>&1 | tee outputs/playback-checks.log
           "$RUNNER_TEMP/playback-checks" 2>&1 | tee -a outputs/playback-checks.log
       - name: Check automatic speed and cached estimate recovery
         run: |
           set -euo pipefail
-          swiftc Locus/Engine/AutomaticTravel.swift Locus/Engine/PlaybackStore.swift Tests/AutomaticTravelChecks.swift -o "$RUNNER_TEMP/automatic-checks" 2>&1 | tee outputs/automatic-checks.log
+          swiftc Locus/Engine/MovementTiming.swift Locus/Engine/AutomaticTravel.swift Locus/Engine/AutomaticPacing.swift Locus/Engine/PlaybackStore.swift Tests/AutomaticTravelChecks.swift -o "$RUNNER_TEMP/automatic-checks" 2>&1 | tee outputs/automatic-checks.log
           "$RUNNER_TEMP/automatic-checks" 2>&1 | tee -a outputs/automatic-checks.log
+      - name: Check local traffic pacing and recovery
+        run: |
+          set -euo pipefail
+          swiftc Locus/Engine/MovementTiming.swift Locus/Engine/AutomaticTravel.swift Locus/Engine/AutomaticPacing.swift Locus/Engine/PlaybackStore.swift Tests/AutomaticPacingChecks.swift -o "$RUNNER_TEMP/pacing-checks" 2>&1 | tee outputs/pacing-checks.log
+          "$RUNNER_TEMP/pacing-checks" 2>&1 | tee -a outputs/pacing-checks.log
       - name: Check remaining route geometry
         run: |
           set -euo pipefail
@@ -77,5 +82,6 @@ jobs:
             outputs/route-line-checks.log
             outputs/automatic-checks.log
             outputs/speed-checks.log
+            outputs/pacing-checks.log
           retention-days: 7
           if-no-files-found: error

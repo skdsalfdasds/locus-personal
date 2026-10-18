@@ -30,7 +30,7 @@ struct RoutePlannerSheet: View {
                     if distanceMeters > 0 {
                         RouteEstimateView(distanceMeters: distanceMeters)
                         Text(session.travelMode == .automatic
-                             ? "Automatic uses Apple Maps traffic ETA to choose an average speed. Variation and interruptions can change arrival time."
+                             ? "Automatic uses traffic estimates for short sections ahead. Unmeasured sections use the overall route average. Variation and interruptions can change arrival time."
                              : "Estimate uses your selected speed; variation and interruptions can change arrival time.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
