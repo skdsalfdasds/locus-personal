@@ -11,7 +11,7 @@ struct MovementTimingChecks {
         close(MovementTiming.stepDuration(distanceMeters: 10, steps: 3, mph: 60) * 3,
               10 / 26.8224, "Subdivision must not lengthen a road segment")
         close(MovementTiming.duration(distanceMeters: 0, mph: 30), 0, "Arrival")
-        close(MovementTiming.duration(distanceMeters: 229493.4528, mph: 60), 8556, "142.6 mile route ETA")
+        close(MovementTiming.duration(distanceMeters: 229492.4544, mph: 60), 8556, "142.6 mile route ETA")
         precondition(MovementTiming.etaLabel(seconds: 0) == "Arrived")
         precondition(MovementTiming.etaLabel(seconds: 61) == "2 min")
         precondition(MovementTiming.etaLabel(seconds: 3660) == "1 hr 1 min")

@@ -22,8 +22,10 @@ jobs:
         run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
       - name: Run movement timing checks
         run: |
-          swiftc Locus/Engine/MovementTiming.swift Tests/MovementTimingChecks.swift -o "$RUNNER_TEMP/movement-checks"
-          "$RUNNER_TEMP/movement-checks"
+          set -euo pipefail
+          mkdir -p outputs
+          swiftc Locus/Engine/MovementTiming.swift Tests/MovementTimingChecks.swift -o "$RUNNER_TEMP/movement-checks" 2>&1 | tee outputs/timing-checks.log
+          "$RUNNER_TEMP/movement-checks" 2>&1 | tee -a outputs/timing-checks.log
       - name: Build unsigned device IPA
         run: bash scripts/build-unsigned-ios.sh
       - name: Save IPA and build log
@@ -34,5 +36,6 @@ jobs:
           path: |
             outputs/Locus-personal-unsigned.ipa
             outputs/build.log
+            outputs/timing-checks.log
           retention-days: 7
           if-no-files-found: error
