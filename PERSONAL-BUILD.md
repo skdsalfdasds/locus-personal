@@ -35,11 +35,29 @@ for the build. The resulting IPA is unsigned and must be signed/sideloaded local
 5. Import your own RPPairing file and use LocalDevVPN, as described in SETUP.md.
 
 The workflow does not publish a release or upload Apple signing credentials.
-This derivative uses bundle identifier `com.locus.personal` and version 1.2.1.
+This derivative uses bundle identifier `com.locus.personal` and version 1.3.0.
 Public repositories with standard hosted runners have free Actions builds;
 private repositories use the account's Actions allowance and may incur charges.
 
 ## Verification status
+
+Version 1.3.0 (build 8) consolidates the map tray to speed/options, ETA, and contextual
+movement actions. Travel modes, speed, variation, joystick, saved places, settings,
+map styles, drawing, routes, and GPX remain reachable through Movement options,
+More, and Map tools. Coordinates and detailed errors moved into Movement options.
+Restore real location now requires an initial warning followed by a continuous
+three-second hold with gradient progress, glow, and haptic feedback. Early release,
+dragging outside, dismissing, or backgrounding cancels. A short-lived confirmation
+permit is required by the session's restore API; a tap or accumulated partial holds
+cannot issue one. Stop remains separate and never calls the clear API.
+On send failure, route/hold intent is retained and retried. Fault-injected tests
+exercise the actual Swift LocationEngine against a C test double and verify failed
+sends, tunnel creation failure, and recovery never call location_simulation_clear.
+This is not a guarantee against iOS resetting its override if the local VPN or
+developer connection disappears; cellular/internet loss is separate from that tunnel.
+Full Release build and all native checks passed:
+https://github.com/skdsalfdasds/locus-personal/actions/runs/39114305504
+Phone animation/gesture validation and real VPN-outage behavior remain pending.
 
 Version 1.2.1 (build 7) adds seconds to ETA. Stop now cancels movement and persists
 the last confirmed position as a hold; it does not call the simulation clear API.

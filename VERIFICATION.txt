@@ -1,6 +1,22 @@
 Build and local validation (October 18, 2026)
 
-LATEST: version 1.2.1 / build 7, source 054b669.
+LATEST: version 1.3.0 / build 8, source 9c10a19.
+PASS: full Release iPhone build; existing timing, tunnel, and persistence checks.
+PASS: no hold confirmation on tap, early release, cancellation, or accumulated holds.
+PASS: a continuous three-second hold issues a single short-lived confirmation permit.
+PASS: actual Swift LocationEngine linked to a fault-injected C test double never
+sends clear during failed location sends, tunnel loss, or reconnection.
+PASS: explicit clear reconnects without injecting temporary coordinates.
+PASS: IPA archive integrity and bundle/version/build metadata.
+Build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39114305504
+IPA: outputs/Locus-1.3.0-unsigned.ipa (also outputs/Locus-personal-unsigned.ipa)
+SHA256: c752cf14d03b90e68d2face2ee265fa3bb5a1b6a98b12b2be1475ddcc713392f
+PENDING: phone gesture cancellation, animation, compact UI layout, physical VPN
+outage behavior, screen-lock/background duration, and Life360 verification.
+No automatic clear command is sent for connection loss; iOS override lifetime
+after actual developer-tunnel loss cannot be guaranteed by these native tests.
+
+Previous version 1.2.1 / build 7, source 054b669:
 PASS: full Release iOS build, developer tunnel checks, and movement timing checks.
 PASS: seconds formatting at sub-minute, minute/hour boundaries, and invalid input.
 PASS: stopping mid-route retains confirmed position, not destination; restores from disk.
