@@ -13,6 +13,7 @@ struct MapHomeView: View {
     @State private var routeEnd: CLLocationCoordinate2D?
     @State private var routeCoords: [CLLocationCoordinate2D] = []
     @State private var routePreviewConsumed = false
+    @State private var isCustomRoute = false
     @State private var isRouting = false
     @State private var showRouteSheet = false
     @State private var showGPXImporter = false
@@ -94,13 +95,24 @@ struct MapHomeView: View {
                             MapPolyline(coordinates: session.remainingRouteCoordinates)
                                 .stroke(LocusTheme.accent, lineWidth: 5)
                         }
-                    } else if !routePreviewConsumed, routeCoords.count > 1 {
+                    } else if !drawMode, !routePreviewConsumed, routeCoords.count > 1 {
                         MapPolyline(coordinates: routeCoords)
                             .stroke(LocusTheme.accent, lineWidth: 5)
                     }
                     if drawnPath.count > 1 {
                         MapPolyline(coordinates: drawnPath)
                             .stroke(LocusTheme.accentSecondary, style: StrokeStyle(lineWidth: 4, dash: [6, 4]))
+                    }
+                    if drawMode {
+                        ForEach(drawnPath.indices, id: \.self) { index in
+                            Annotation("", coordinate: drawnPath[index]) {
+                                Text("\(index + 1)")
+                                    .font(.caption2.bold())
+                                    .foregroundStyle(.black)
+                                    .padding(5)
+                                    .background(Circle().fill(LocusTheme.accentSecondary))
+                            }
+                        }
                     }
                 }
                 .mapStyle(mapStyle)
@@ -133,13 +145,17 @@ struct MapHomeView: View {
         }
         .onChange(of: [session.pin?.latitude, session.pin?.longitude]) { _, _ in
             if session.pin == nil { pinSelected = false }
+            if let pin = session.pin, let end = routeEnd,
+               abs(pin.latitude - end.latitude) > 0.000001 || abs(pin.longitude - end.longitude) > 0.000001 {
+                isCustomRoute = false
+            }
             scheduleRoutePreview()
         }
         .onReceive(NotificationCenter.default.publisher(for: .locusMoveSelected)) { _ in
             moveToSelectedPin()
         }
         .onChange(of: session.travelMode) { _, _ in
-            scheduleRoutePreview(force: true)
+            if session.travelMode == .automatic || !isCustomRoute { scheduleRoutePreview(force: true) }
         }
         .onDisappear {
             previewTask?.cancel()
@@ -164,20 +180,7 @@ struct MapHomeView: View {
                 onPlay: playRoute,
                 onImportGPX: { showGPXImporter = true },
                 onExportGPX: exportGPX,
-                onUseDrawn: {
-                    previewTask?.cancel()
-                    routeRequestID = UUID()
-                    routeCoords = RouteBuilder.sample(coordinates: drawnPath, every: 10)
-                    routePreviewConsumed = false
-                    routeStart = routeCoords.first
-                    routeEnd = routeCoords.last
-                    session.pin = routeEnd
-                    session.previewDistanceMeters = RouteBuilder.distance(routeCoords)
-                    isRouting = false
-                    session.previewIsRouting = false
-                    drawnPath.removeAll()
-                    drawMode = false
-                }
+                onUseDrawn: useDrawnRoute
             )
             .presentationDetents([.medium, .large])
         }
@@ -209,6 +212,7 @@ struct MapHomeView: View {
                 Spacer(minLength: 0)
                 locateButton
             }
+            if drawMode { drawingControls }
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 2)
@@ -291,9 +295,9 @@ struct MapHomeView: View {
             Button("Routes and GPX", systemImage: "point.topleft.down.to.point.bottomright.curvepath") {
                 showRouteSheet = true
             }
-            Button(drawMode ? "Finish drawing" : "Draw route", systemImage: "pencil.tip") {
-                drawMode.toggle()
-                if !drawMode { drawnPath.removeAll() }
+            Button(drawMode ? "Use drawn route" : "Draw route", systemImage: "pencil.tip") {
+                if drawMode { useDrawnRoute() }
+                else { beginDrawing() }
             }
             if session.pin != nil {
                 Button("Save selected place", systemImage: "star") {
@@ -311,6 +315,60 @@ struct MapHomeView: View {
         }
         .locusGlass(.clear, in: Capsule())
         .contentShape(Capsule())
+    }
+
+    private var drawingControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Tap the map to add route points")
+                .font(.subheadline.weight(.semibold))
+            Text("\(drawnPath.count) points · Straight segments between taps, using manual MPH. Use the route, then tap Move.")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Button("Undo", systemImage: "arrow.uturn.backward") { _ = drawnPath.popLast() }
+                    .disabled(drawnPath.isEmpty)
+                Spacer()
+                Button("Cancel") { drawMode = false; drawnPath.removeAll() }
+                Button("Use manual route", action: useDrawnRoute)
+                    .fontWeight(.semibold)
+                    .disabled(drawnPath.count < 2)
+            }
+            .font(.subheadline)
+        }
+        .padding(14)
+        .locusGlass(.regular, in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    private func beginDrawing() {
+        previewTask?.cancel()
+        routeRequestID = UUID()
+        isRouting = false
+        session.previewIsRouting = false
+        searchFocused = false
+        drawnPath = (session.simulated ?? session.realCoordinate).map { [$0] } ?? []
+        drawMode = true
+    }
+
+    private func useDrawnRoute() {
+        guard drawnPath.count >= 2 else {
+            session.lastError = "Tap at least two points on the map to create a custom route."
+            return
+        }
+        previewTask?.cancel()
+        routeRequestID = UUID()
+        routeCoords = RouteBuilder.sample(coordinates: drawnPath, every: 10)
+        routePreviewConsumed = false
+        isCustomRoute = true
+        session.useManualModeForCustomPath()
+        routeStart = routeCoords.first
+        routeEnd = routeCoords.last
+        session.pin = routeEnd
+        session.previewDistanceMeters = RouteBuilder.distance(routeCoords)
+        isRouting = false
+        session.previewIsRouting = false
+        drawnPath.removeAll()
+        drawMode = false
+        showRouteSheet = false
+        showRouteOnMap(routeCoords)
     }
 
     private var locateButton: some View {
@@ -399,13 +457,17 @@ struct MapHomeView: View {
         isRouting = true
         session.previewIsRouting = true
         session.previewDistanceMeters = nil
+        session.previewAutomaticEstimate = nil
         let mode = session.travelMode
         Task {
             do {
-                let coords = try await RouteBuilder.roadRoute(from: start, to: end, mode: mode)
+                let plan = try await RouteBuilder.roadRoute(from: start, to: end, mode: mode)
                 await MainActor.run {
                     guard routeRequestID == requestID else { return }
+                    let coords = plan.coordinates
                     routeCoords = coords
+                    isCustomRoute = false
+                    session.previewAutomaticEstimate = plan.automaticEstimate
                     routePreviewConsumed = false
                     isRouting = false
                     session.previewIsRouting = false
@@ -436,6 +498,7 @@ struct MapHomeView: View {
             isRouting = false
             session.previewIsRouting = false
             session.previewDistanceMeters = nil
+            session.previewAutomaticEstimate = nil
             return
         }
         if !force, let end = routeEnd, routeCoords.count > 1,
@@ -446,6 +509,7 @@ struct MapHomeView: View {
         routeCoords = []
         routeEnd = destination
         session.previewDistanceMeters = nil
+        session.previewAutomaticEstimate = nil
         isRouting = false
         session.previewIsRouting = false
         guard let start = session.simulated ?? session.realCoordinate else { return }
@@ -519,7 +583,7 @@ struct MapHomeView: View {
             return
         }
         showRouteSheet = false
-        session.followRoute(path, pairing: pairing)
+        session.followRoute(path, pairing: pairing, estimate: isCustomRoute ? nil : session.previewAutomaticEstimate)
         if session.routeRunning { routePreviewConsumed = true }
     }
 
@@ -529,6 +593,8 @@ struct MapHomeView: View {
             routeRequestID = UUID()
             let coords = try GPXCodec.parse(url)
             routeCoords = RouteBuilder.sample(coordinates: coords, every: 10)
+            isCustomRoute = true
+            session.useManualModeForCustomPath()
             routePreviewConsumed = false
             routeStart = coords.first
             routeEnd = coords.last

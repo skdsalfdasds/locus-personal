@@ -17,12 +17,12 @@ struct BottomControlsView: View {
             }
             HStack {
                 Button { showMovementOptions = true } label: {
-                    Label("\(Int(session.speedMPH)) mph", systemImage: "slider.horizontal.3")
+                    Label(session.speedLabel, systemImage: "slider.horizontal.3")
                         .font(.subheadline.weight(.semibold).monospacedDigit())
                         .padding(.vertical, 8)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Movement options, \(Int(session.speedMPH)) miles per hour")
+                .accessibilityLabel("Movement options, \(session.speedLabel)")
                 Spacer()
                 Menu {
                     Button("Movement options", systemImage: "slider.horizontal.3") { showMovementOptions = true }
@@ -128,10 +128,13 @@ private struct MovementOptionsSheet: View {
                     Picker("Travel mode", selection: $session.travelMode) {
                         ForEach(TravelMode.allCases) { mode in
                             Label(mode.title, systemImage: mode.icon).tag(mode)
+                                .disabled(mode == .automatic && session.joystickActive)
                         }
                     }
                     SpeedControlView()
-                    Toggle("Vary speed slightly", isOn: $session.variesSpeed)
+                    Toggle("Smooth speed variation", isOn: $session.variesSpeed)
+                    Text("Gentle changes over time and around turns, with gradual acceleration/braking. No per-segment random jumps.")
+                        .font(.footnote).foregroundStyle(.secondary)
                 }
                 Section("Joystick") {
                     Toggle("Show joystick", isOn: Binding(

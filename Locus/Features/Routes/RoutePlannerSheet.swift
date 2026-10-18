@@ -22,13 +22,16 @@ struct RoutePlannerSheet: View {
                     Picker("Travel mode", selection: $session.travelMode) {
                         ForEach(TravelMode.allCases) { mode in
                             Label(mode.title, systemImage: mode.icon).tag(mode)
+                                .disabled(mode == .automatic && session.joystickActive)
                         }
                     }
                     SpeedControlView()
-                    Toggle("Vary speed slightly", isOn: $session.variesSpeed)
+                    Toggle("Smooth speed variation", isOn: $session.variesSpeed)
                     if distanceMeters > 0 {
                         RouteEstimateView(distanceMeters: distanceMeters)
-                        Text("Estimate uses your selected speed; variation and interruptions can change arrival time.")
+                        Text(session.travelMode == .automatic
+                             ? "Automatic uses Apple Maps traffic ETA to choose an average speed. Variation and interruptions can change arrival time."
+                             : "Estimate uses your selected speed; variation and interruptions can change arrival time.")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }

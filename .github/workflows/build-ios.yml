@@ -28,6 +28,11 @@ jobs:
           "$RUNNER_TEMP/movement-checks" 2>&1 | tee -a outputs/timing-checks.log
       - name: Build unsigned device IPA
         run: bash scripts/build-unsigned-ios.sh
+      - name: Check smooth speed variation
+        run: |
+          set -euo pipefail
+          swiftc Locus/Engine/MovementTiming.swift Locus/Engine/SpeedVariation.swift Tests/SpeedVariationChecks.swift -o "$RUNNER_TEMP/speed-checks" 2>&1 | tee outputs/speed-checks.log
+          "$RUNNER_TEMP/speed-checks" 2>&1 | tee -a outputs/speed-checks.log
       - name: Check restore hold confirmation and connection failure behavior
         run: |
           set -euo pipefail
@@ -40,8 +45,13 @@ jobs:
       - name: Check saved route and hold recovery
         run: |
           set -euo pipefail
-          swiftc Locus/Engine/PlaybackStore.swift Tests/PlaybackStoreChecks.swift -o "$RUNNER_TEMP/playback-checks" 2>&1 | tee outputs/playback-checks.log
+          swiftc Locus/Engine/AutomaticTravel.swift Locus/Engine/PlaybackStore.swift Tests/PlaybackStoreChecks.swift -o "$RUNNER_TEMP/playback-checks" 2>&1 | tee outputs/playback-checks.log
           "$RUNNER_TEMP/playback-checks" 2>&1 | tee -a outputs/playback-checks.log
+      - name: Check automatic speed and cached estimate recovery
+        run: |
+          set -euo pipefail
+          swiftc Locus/Engine/AutomaticTravel.swift Locus/Engine/PlaybackStore.swift Tests/AutomaticTravelChecks.swift -o "$RUNNER_TEMP/automatic-checks" 2>&1 | tee outputs/automatic-checks.log
+          "$RUNNER_TEMP/automatic-checks" 2>&1 | tee -a outputs/automatic-checks.log
       - name: Check remaining route geometry
         run: |
           set -euo pipefail
@@ -65,5 +75,7 @@ jobs:
             outputs/playback-checks.log
             outputs/safety-checks.log
             outputs/route-line-checks.log
+            outputs/automatic-checks.log
+            outputs/speed-checks.log
           retention-days: 7
           if-no-files-found: error

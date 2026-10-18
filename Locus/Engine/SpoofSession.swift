@@ -5,7 +5,7 @@ import UIKit
 import UserNotifications
 
 enum TravelMode: String, CaseIterable, Identifiable {
-    case walk, run, cycle, drive
+    case walk, run, cycle, drive, automatic
 
     var id: String { rawValue }
 
@@ -15,6 +15,7 @@ enum TravelMode: String, CaseIterable, Identifiable {
         case .run: return "Run"
         case .cycle: return "Cycle"
         case .drive: return "Drive"
+        case .automatic: return "Automatic"
         }
     }
 
@@ -24,6 +25,7 @@ enum TravelMode: String, CaseIterable, Identifiable {
         case .run: return "figure.run"
         case .cycle: return "bicycle"
         case .drive: return "car.fill"
+        case .automatic: return "sparkles"
         }
     }
 
@@ -33,14 +35,14 @@ enum TravelMode: String, CaseIterable, Identifiable {
         case .walk: return 1.4
         case .run: return 3.3
         case .cycle: return 6.5
-        case .drive: return 13.4
+        case .drive, .automatic: return 13.4
         }
     }
 
     var mkTransportType: MKDirectionsTransportType {
         switch self {
         case .walk, .run: return .walking
-        case .cycle, .drive: return .automobile
+        case .cycle, .drive, .automatic: return .automobile
         }
     }
 }
@@ -73,15 +75,27 @@ final class SpoofSession: ObservableObject {
     @Published var status: SpoofStatus = .idle
     @Published var pin: CLLocationCoordinate2D?
     @Published var simulated: CLLocationCoordinate2D?
-    @Published var travelMode: TravelMode = .drive {
+    @Published var travelMode: TravelMode = .automatic {
         didSet {
-            if travelMode != oldValue { speedMPH = travelMode.baseSpeed / 0.44704 }
+            guard travelMode != oldValue else { return }
+            automaticRefreshTask?.cancel()
+            automaticRefreshTask = nil
+            automaticEstimate = nil
+            previewAutomaticEstimate = nil
+            if travelMode == .automatic {
+                if routeRunning { startAutomaticUpdates() }
+            } else {
+                speedMPH = travelMode.baseSpeed / 0.44704
+                if routeRunning { playbackStore.saveAutomaticEstimate(nil) }
+            }
         }
     }
     @Published var speedMPH: Double = 30 {
         didSet { UserDefaults.standard.set(speedMPH, forKey: "locus.speedMPH") }
     }
     @Published var variesSpeed = true
+    @Published var previewAutomaticEstimate: AutomaticTravel.Estimate?
+    @Published private(set) var automaticEstimate: AutomaticTravel.Estimate?
     @Published private(set) var routeRunning = false
     @Published private(set) var routePaused = false
     @Published private(set) var routeRemainingMeters: Double = 0
@@ -111,6 +125,9 @@ final class SpoofSession: ObservableObject {
     private var holdTarget: CLLocationCoordinate2D?
     private var nextWaypoint = 1
     private var activeRouteCoordinates: [CLLocationCoordinate2D] = []
+    private var automaticRefreshTask: Task<Void, Never>?
+    private var joystickVariation = SpeedVariation()
+    private var joystickElapsed: TimeInterval = 0
     private var restorePending = false
 
     private let favoritesKey = "locus.favorites"
@@ -134,6 +151,30 @@ final class SpoofSession: ObservableObject {
     }
 
     var requiresRestoreRetry: Bool { restorePending }
+
+    var currentAutomaticEstimate: AutomaticTravel.Estimate? {
+        routeRunning ? automaticEstimate : previewAutomaticEstimate
+    }
+
+    var effectiveSpeedMPH: Double {
+        travelMode == .automatic ? (currentAutomaticEstimate?.targetMPH ?? speedMPH) : speedMPH
+    }
+
+    var speedLabel: String {
+        if travelMode == .automatic {
+            return currentAutomaticEstimate == nil ? "Automatic" : String(format: "Auto · %.0f mph", effectiveSpeedMPH)
+        }
+        return String(format: "%.0f mph", speedMPH)
+    }
+
+    func useManualModeForCustomPath() {
+        if travelMode == .automatic {
+            let manualSpeed = speedMPH
+            travelMode = .drive
+            speedMPH = manualSpeed
+        }
+        previewAutomaticEstimate = nil
+    }
 
     func teleport(to coordinate: CLLocationCoordinate2D, pairing: PairingStore) {
         guard pairing.hasPairingFile else {
@@ -214,6 +255,10 @@ final class SpoofSession: ObservableObject {
     }
 
     func startJoystick(pairing: PairingStore) {
+        guard travelMode != .automatic else {
+            lastError = "Automatic needs a destination and an Apple Maps route. Choose a manual mode for joystick movement."
+            return
+        }
         guard pairing.hasPairingFile else {
             lastError = "Import an RPPairing file in Settings first."
             return
@@ -232,6 +277,8 @@ final class SpoofSession: ObservableObject {
             apply(start, pairing: pairing, markRecent: false)
         }
         joystickActive = true
+        joystickVariation = SpeedVariation()
+        joystickElapsed = 0
         joystickTimer?.invalidate()
         joystickTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -252,12 +299,17 @@ final class SpoofSession: ObservableObject {
     }
 
     func followRoute(_ coordinates: [CLLocationCoordinate2D], pairing: PairingStore,
-                     restoring: Bool = false, initiallyPaused: Bool = false) {
+                     restoring: Bool = false, initiallyPaused: Bool = false,
+                     estimate: AutomaticTravel.Estimate? = nil) {
         guard pairing.hasPairingFile else {
             lastError = "Import an RPPairing file in Settings first."
             return
         }
         guard coordinates.count >= 2 else { return }
+        guard travelMode != .automatic || estimate != nil else {
+            lastError = "Automatic needs an Apple Maps road route and traffic estimate. Build a road route, or choose Drive for a drawn/GPX path."
+            return
+        }
         if !restoring, let current = simulated ?? realCoordinate {
             let gap = CLLocation(latitude: current.latitude, longitude: current.longitude)
                 .distance(from: CLLocation(latitude: coordinates[0].latitude, longitude: coordinates[0].longitude))
@@ -273,12 +325,15 @@ final class SpoofSession: ObservableObject {
         routePaused = initiallyPaused
         nextWaypoint = 1
         activeRouteCoordinates = coordinates
+        automaticEstimate = travelMode == .automatic ? estimate : nil
         previewDistanceMeters = nil
         holdTarget = nil
         holdingDestination = false
         routeRemainingMeters = RouteBuilder.distance(coordinates)
-        playbackStore.beginRoute(coordinates.map(Self.storedPoint), paused: initiallyPaused)
+        playbackStore.beginRoute(coordinates.map(Self.storedPoint), paused: initiallyPaused,
+                                 automaticEstimate: automaticEstimate)
         prepareForBackground(pairing: pairing)
+        if travelMode == .automatic { startAutomaticUpdates() }
         routeTask = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -286,10 +341,14 @@ final class SpoofSession: ObservableObject {
                     self.routeRunning = false
                     self.routePaused = false
                     self.routeTask = nil
+                    self.automaticRefreshTask?.cancel()
+                    self.automaticRefreshTask = nil
                 }
             }
             guard !Task.isCancelled else { return }
             var previous = coordinates[0]
+            var variation = SpeedVariation()
+            var movingTime: TimeInterval = 0
             var started = self.apply(previous, pairing: pairing, markRecent: true)
             while !started {
                 do { try await Task.sleep(nanoseconds: 2_000_000_000) } catch { return }
@@ -301,9 +360,9 @@ final class SpoofSession: ObservableObject {
                 guard !Task.isCancelled else { return }
                 let distance = CLLocation(latitude: previous.latitude, longitude: previous.longitude)
                     .distance(from: CLLocation(latitude: next.latitude, longitude: next.longitude))
-                let stepMeters = min(12, max(2, MovementTiming.metersPerSecond(mph: self.speedMPH) * 0.5))
+                let stepMeters = min(12, max(2, MovementTiming.metersPerSecond(mph: self.effectiveSpeedMPH) * 0.5))
                 let steps = max(1, Int(ceil(distance / stepMeters)))
-                let variation = self.variesSpeed ? Double.random(in: 0.92...1.08) : 1
+                let bend = RouteLine.bendSeverity(coordinates, nextWaypoint: index)
                 for i in 1...steps {
                     guard !Task.isCancelled else { return }
                     while self.routePaused {
@@ -314,7 +373,9 @@ final class SpoofSession: ObservableObject {
                         latitude: previous.latitude + (next.latitude - previous.latitude) * t,
                         longitude: previous.longitude + (next.longitude - previous.longitude) * t
                     )
-                    let delay = MovementTiming.stepDuration(distanceMeters: distance, steps: steps, mph: self.speedMPH * variation)
+                    let delay = variation.duration(distanceMeters: distance / Double(steps),
+                                                   baseMPH: self.effectiveSpeedMPH, elapsed: movingTime,
+                                                   bendSeverity: bend, enabled: self.variesSpeed)
                     do { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) } catch { return }
                     while self.routePaused {
                         do { try await Task.sleep(nanoseconds: 200_000_000) } catch { return }
@@ -326,6 +387,7 @@ final class SpoofSession: ObservableObject {
                         guard !Task.isCancelled else { return }
                     }
                     self.routeRemainingMeters = max(0, self.routeRemainingMeters - distance / Double(steps))
+                    movingTime += delay
                     self.saveRouteCheckpoint()
                 }
                 previous = next
@@ -340,7 +402,7 @@ final class SpoofSession: ObservableObject {
     }
 
     var routeETA: TimeInterval {
-        MovementTiming.duration(distanceMeters: routeRemainingMeters, mph: speedMPH)
+        MovementTiming.duration(distanceMeters: routeRemainingMeters, mph: effectiveSpeedMPH)
     }
 
     func toggleRoutePause() {
@@ -361,7 +423,13 @@ final class SpoofSession: ObservableObject {
                 CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
             }
             pin = coordinates.last
-            followRoute(coordinates, pairing: pairing, restoring: true, initiallyPaused: savedRoute.paused)
+            if savedRoute.automaticEstimate != nil {
+                travelMode = .automatic
+            } else if travelMode == .automatic {
+                useManualModeForCustomPath()
+            }
+            followRoute(coordinates, pairing: pairing, restoring: true, initiallyPaused: savedRoute.paused,
+                        estimate: savedRoute.automaticEstimate)
         } else if let saved = playbackStore.hold {
             holdTarget = CLLocationCoordinate2D(latitude: saved.latitude, longitude: saved.longitude)
             prepareForBackground(pairing: pairing)
@@ -395,12 +463,42 @@ final class SpoofSession: ObservableObject {
         routeID = UUID()
         routeTask?.cancel()
         routeTask = nil
+        automaticRefreshTask?.cancel()
+        automaticRefreshTask = nil
         routeRunning = false
         routePaused = false
         routeRemainingMeters = 0
         remainingRouteCoordinates = []
         activeRouteCoordinates = []
         stopJoystick()
+    }
+
+    private func startAutomaticUpdates() {
+        automaticRefreshTask?.cancel()
+        let currentRouteID = routeID
+        automaticRefreshTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled, self.routeID == currentRouteID, self.routeRunning,
+                  self.travelMode == .automatic {
+                let expired = self.automaticEstimate.map {
+                    Date().timeIntervalSince($0.fetchedAt) >= AutomaticTravel.refreshInterval
+                } ?? true
+                if expired, !self.routePaused, self.routeRemainingMeters > 1,
+                   let current = self.simulated, let end = self.activeRouteCoordinates.last {
+                    do {
+                        let estimate = try await RouteBuilder.trafficEstimate(
+                            from: current, to: end, distanceMeters: self.routeRemainingMeters)
+                        guard !Task.isCancelled, self.routeID == currentRouteID, self.travelMode == .automatic else { return }
+                        self.automaticEstimate = estimate
+                        self.playbackStore.saveAutomaticEstimate(estimate)
+                    } catch {
+                        // An internet outage keeps the cached speed and route running.
+                    }
+                }
+                do { try await Task.sleep(nanoseconds: 60_000_000_000) }
+                catch { return }
+            }
+        }
     }
 
     func addFavorite(name: String, coordinate: CLLocationCoordinate2D) {
@@ -533,9 +631,10 @@ final class SpoofSession: ObservableObject {
         guard magnitude > 0.08 else { return }
         let nx = joystickVector.dx / magnitude
         let ny = -joystickVector.dy / magnitude
-        let variation = variesSpeed ? Double.random(in: 0.92...1.08) : 1
-        let speed = MovementTiming.metersPerSecond(mph: speedMPH) * min(1.0, magnitude) * variation
         let dt = 0.25
+        let speed = joystickVariation.joystickSpeed(baseMPH: speedMPH * min(1, magnitude),
+                                                    elapsed: joystickElapsed, interval: dt, enabled: variesSpeed)
+        joystickElapsed += dt
         let meters = speed * dt
         let next = offset(coordinate: current, eastMeters: nx * meters, northMeters: ny * meters)
         apply(next, pairing: pairing, markRecent: false)

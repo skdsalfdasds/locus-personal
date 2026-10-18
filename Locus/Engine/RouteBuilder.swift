@@ -3,6 +3,10 @@ import Foundation
 import MapKit
 
 enum RouteBuilder {
+    struct Plan {
+        let coordinates: [CLLocationCoordinate2D]
+        let automaticEstimate: AutomaticTravel.Estimate?
+    }
     static func distance(_ coordinates: [CLLocationCoordinate2D]) -> CLLocationDistance {
         zip(coordinates, coordinates.dropFirst()).reduce(0) { total, pair in
             total + CLLocation(latitude: pair.0.latitude, longitude: pair.0.longitude)
@@ -13,19 +17,39 @@ enum RouteBuilder {
         from start: CLLocationCoordinate2D,
         to end: CLLocationCoordinate2D,
         mode: TravelMode
-    ) async throws -> [CLLocationCoordinate2D] {
+    ) async throws -> Plan {
         let request = MKDirections.Request()
         request.source = MKMapItem(placemark: MKPlacemark(coordinate: start))
         request.destination = MKMapItem(placemark: MKPlacemark(coordinate: end))
         request.transportType = mode.mkTransportType
         request.requestsAlternateRoutes = false
+        request.departureDate = Date()
 
         let directions = MKDirections(request: request)
         let response = try await directions.calculate()
         guard let route = response.routes.first else {
             throw NSError(domain: "Locus", code: 1, userInfo: [NSLocalizedDescriptionKey: "No route found"])
         }
-        return sample(polyline: route.polyline, every: 12)
+        let coordinates = sample(polyline: route.polyline, every: 12)
+        // MKRoute.expectedTravelTime is documented as ideal-condition travel.
+        // ETAResponse explicitly includes expected traffic; request that separately.
+        let estimate = mode == .automatic
+            ? try await trafficEstimate(from: start, to: end, distanceMeters: distance(coordinates)) : nil
+        return Plan(coordinates: coordinates, automaticEstimate: estimate)
+    }
+
+    static func trafficEstimate(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D,
+                                distanceMeters: Double) async throws -> AutomaticTravel.Estimate {
+        let request = MKDirections.Request()
+        request.source = MKMapItem(placemark: MKPlacemark(coordinate: start))
+        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: end))
+        request.transportType = .automobile
+        request.departureDate = Date()
+        let eta = try await MKDirections(request: request).calculateETA()
+        guard let estimate = AutomaticTravel.estimate(distanceMeters: distanceMeters, seconds: eta.expectedTravelTime) else {
+            throw NSError(domain: "Locus", code: 3, userInfo: [NSLocalizedDescriptionKey: "Apple Maps did not return a usable traffic estimate. Try again or choose Drive for manual speed."])
+        }
+        return estimate
     }
 
     static func sample(polyline: MKPolyline, every meters: CLLocationDistance) -> [CLLocationCoordinate2D] {

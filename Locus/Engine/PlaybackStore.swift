@@ -22,21 +22,24 @@ final class PlaybackStore {
     struct Recovery {
         let remaining: [Point]
         let paused: Bool
+        let automaticEstimate: AutomaticTravel.Estimate?
     }
 
     private let defaults: UserDefaults
     private let planKey = "locus.resumeRoutePlan"
     private let progressKey = "locus.resumeRouteProgress"
     private let holdKey = "locus.holdCoordinate"
+    private let automaticKey = "locus.resumeAutomaticEstimate"
     private var lastCheckpoint = Date.distantPast
 
     init(defaults: UserDefaults = .standard) { self.defaults = defaults }
 
-    func beginRoute(_ points: [Point], paused: Bool) {
+    func beginRoute(_ points: [Point], paused: Bool, automaticEstimate: AutomaticTravel.Estimate? = nil) {
         clearRoute()
         guard points.count >= 2, points.allSatisfy(\.isValid),
               let data = try? JSONEncoder().encode(points) else { return }
         defaults.set(data, forKey: planKey)
+        saveAutomaticEstimate(automaticEstimate)
         checkpoint(position: points[0], nextWaypoint: 1, paused: paused, force: true)
     }
 
@@ -55,7 +58,19 @@ final class PlaybackStore {
               let progress = try? JSONDecoder().decode(Progress.self, from: progressData),
               plan.count >= 2, plan.allSatisfy(\.isValid), progress.position.isValid,
               progress.nextWaypoint >= 1, progress.nextWaypoint < plan.count else { return nil }
-        return Recovery(remaining: [progress.position] + plan.dropFirst(progress.nextWaypoint), paused: progress.paused)
+        let automatic = defaults.data(forKey: automaticKey).flatMap {
+            try? JSONDecoder().decode(AutomaticTravel.Estimate.self, from: $0)
+        }
+        return Recovery(remaining: [progress.position] + plan.dropFirst(progress.nextWaypoint),
+                        paused: progress.paused, automaticEstimate: automatic)
+    }
+
+    func saveAutomaticEstimate(_ estimate: AutomaticTravel.Estimate?) {
+        if let estimate, let data = try? JSONEncoder().encode(estimate) {
+            defaults.set(data, forKey: automaticKey)
+        } else {
+            defaults.removeObject(forKey: automaticKey)
+        }
     }
 
     var hold: Point? {
@@ -73,6 +88,7 @@ final class PlaybackStore {
     func clearRoute() {
         defaults.removeObject(forKey: progressKey)
         defaults.removeObject(forKey: planKey)
+        defaults.removeObject(forKey: automaticKey)
         lastCheckpoint = .distantPast
     }
 
