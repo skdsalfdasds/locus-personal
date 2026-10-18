@@ -40,9 +40,7 @@ struct MapHomeView: View {
             // shifts convert() upward by ~status-bar height.
             MapReader { proxy in
                 Map(position: $position) {
-                    if !session.routeRunning && !session.joystickActive {
-                        UserAnnotation()
-                    }
+                    UserAnnotation()
 
                     if let pin = session.pin {
                         Annotation("", coordinate: pin, anchor: .bottom) {

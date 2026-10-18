@@ -73,7 +73,7 @@ final class SpoofSession: ObservableObject {
     @Published var status: SpoofStatus = .idle
     @Published var pin: CLLocationCoordinate2D?
     @Published var simulated: CLLocationCoordinate2D?
-    @Published var travelMode: TravelMode = .walk {
+    @Published var travelMode: TravelMode = .drive {
         didSet {
             if travelMode != oldValue { speedMPH = travelMode.baseSpeed / 0.44704 }
         }
