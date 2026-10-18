@@ -1,0 +1,20 @@
+Local validation (October 18, 2026)
+
+PASS: Swift syntax parser accepts all 10 modified/new Swift files.
+PASS: project.yml and .github/workflows/build-ios.yml parse as YAML.
+PASS: workflow has a manual-only trigger, a standard macOS runner, and read-only repository permissions.
+PASS: resource plist files parse.
+PASS: build-unsigned-ios.sh passes bash -n.
+PASS: git diff --check.
+
+NOT RUN: Swift compiler/typecheck, executable timing checks, full iOS build,
+simulator UI inspection, physical-device movement, screen-lock/background playback,
+Life360 Circle-view verification, long-duration destination hold.
+
+The syntax parser reports a limitation on two pre-existing ternary expressions
+in unchanged upstream LocationEngine.swift. The same parser reports those errors
+on the original upstream file; this is not treated as validation of that file.
+
+The source archive contains only this modified open-source repository.
+No personal route, home address, pairing file, Apple account credential,
+signing private key, or proprietary iAnyGo binary is included.

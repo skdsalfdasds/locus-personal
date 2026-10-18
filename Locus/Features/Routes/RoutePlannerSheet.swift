@@ -5,6 +5,7 @@ struct RoutePlannerSheet: View {
     @Binding var start: CLLocationCoordinate2D?
     @Binding var end: CLLocationCoordinate2D?
     @Binding var isRouting: Bool
+    var distanceMeters: Double
     var onBuild: () -> Void
     var onPlay: () -> Void
     var onImportGPX: () -> Void
@@ -17,6 +18,21 @@ struct RoutePlannerSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Movement") {
+                    Picker("Travel mode", selection: $session.travelMode) {
+                        ForEach(TravelMode.allCases) { mode in
+                            Label(mode.title, systemImage: mode.icon).tag(mode)
+                        }
+                    }
+                    SpeedControlView()
+                    Toggle("Vary speed slightly", isOn: $session.variesSpeed)
+                    if distanceMeters > 0 {
+                        RouteEstimateView(distanceMeters: distanceMeters)
+                        Text("Estimate uses your selected speed; variation and interruptions can change arrival time.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 Section("Road route") {
                     Button("Use current pin / spoof as start") {
                         start = session.simulated ?? session.pin
@@ -49,7 +65,7 @@ struct RoutePlannerSheet: View {
                         Label("Use drawn path from map", systemImage: "pencil.tip")
                     }
                     Button(action: onPlay) {
-                        Label("Follow route", systemImage: "play.fill")
+                        Label("Move along route", systemImage: "play.fill")
                     }
                     Button(action: onImportGPX) {
                         Label("Import GPX", systemImage: "square.and.arrow.down")
@@ -60,7 +76,7 @@ struct RoutePlannerSheet: View {
                 }
 
                 Section {
-                    Text("Routes follow Apple Maps roads/footpaths for the selected travel mode. Speed gets light random variation so motion looks less robotic.")
+                    Text("Routes follow Apple Maps roads/footpaths. The destination stays active after arrival until you Stop. Keep LocalDevVPN connected; background interruptions can pause movement.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

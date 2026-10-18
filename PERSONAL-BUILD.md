@@ -1,0 +1,55 @@
+# Personal Locus changes
+
+This is a local MIT-licensed derivative of ChrisMack32/Locus. The original interface,
+address autocomplete, favorites, joystick, map modes, road routing, and GPX import remain.
+
+Added: 1–85 MPH control, route distance and estimated travel time, automatic route
+preview for a selected pin or address, explicit Move and Teleport buttons, movement
+pause/resume, live speed changes, and optional modest speed variation in Routes.
+
+Playback uses actual segment distances rather than rounding every substep up to a
+fixed distance. A tunnel failure keeps the route cursor in place and retries instead
+of skipping ahead. After arrival or teleporting, the app resends its last position.
+The last confirmed coordinate is saved locally and reapplied when the app opens.
+Stop clears the saved hold target and requests restoration of real GPS.
+
+The app's existing silent audio and background-location facilities are now connected
+to the movement session. This targets screen-locked use; it is not a guarantee of
+continuous execution. A powered-off phone cannot run playback. Force quitting,
+rebooting, iOS suspension, tunnel loss, and expired signing can interrupt it. Life360
+has not been tested. GPX coordinates are imported, but imported GPX timestamps do
+not control this version's playback; the MPH control does.
+
+## Build without owning a Mac
+
+The supplied GitHub Actions workflow uses a hosted macOS runner and Xcode 26.3.
+Upload only this source repository, not its parent folder. No route addresses,
+pairing records, Apple credentials, signing keys, or iAnyGo binaries are required
+for the build. The resulting IPA is unsigned and must be signed/sideloaded locally.
+
+1. Put this source in your own GitHub repository with Actions enabled.
+2. Run Actions → Build personal Locus IPA → Run workflow.
+3. Download the Locus-personal-unsigned artifact.
+4. Sign and sideload Locus-personal-unsigned.ipa with a suitable local signing tool.
+5. Import your own RPPairing file and use LocalDevVPN, as described in SETUP.md.
+
+The workflow does not publish a release or upload Apple signing credentials.
+This derivative uses bundle identifier `com.locus.personal` and version 1.1.0.
+Public repositories with standard hosted runners have free Actions builds;
+private repositories use the account's Actions allowance and may incur charges.
+
+## Verification status
+
+This Windows environment has no Xcode/iOS SDK. Swift syntax, YAML/plist structure,
+and source diffs can be checked locally; full compilation and iPhone behavior remain
+unverified until the macOS workflow and physical-device tests run.
+
+The workflow includes executable checks for MPH units, ETA, and segment pacing.
+Device acceptance: address search and pin route previews; distance and ETA;
+Move vs Teleport; speed changes while moving; pause/resume; screen-lock playback;
+arrival hold; tunnel interruption/reconnection; Stop restoring actual GPS.
+
+Local checks completed: all 10 new/modified Swift files parse without syntax errors;
+project/workflow YAML and resource plists parse; the build shell script passes Bash
+syntax checking; git diff passes whitespace checks. These are not a Swift typecheck
+or a successful iOS build. The timing checks are prepared but have not been executed.

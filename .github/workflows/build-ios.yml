@@ -1,0 +1,38 @@
+name: Build personal Locus IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 26
+        run: |
+          set -euo pipefail
+          test -d /Applications/Xcode_26.3.app/Contents/Developer
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+          xcodebuild -version
+      - name: Install project generator
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Run movement timing checks
+        run: |
+          swiftc Locus/Engine/MovementTiming.swift Tests/MovementTimingChecks.swift -o "$RUNNER_TEMP/movement-checks"
+          "$RUNNER_TEMP/movement-checks"
+      - name: Build unsigned device IPA
+        run: bash scripts/build-unsigned-ios.sh
+      - name: Save IPA and build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Locus-personal-unsigned
+          path: |
+            outputs/Locus-personal-unsigned.ipa
+            outputs/build.log
+          retention-days: 7
+          if-no-files-found: error

@@ -20,6 +20,8 @@ struct MapHomeView: View {
     @State private var pinSelected = false
     @State private var isDraggingPin = false
     @State private var suppressNextMapTap = false
+    @State private var previewTask: Task<Void, Never>?
+    @State private var routeRequestID = UUID()
     /// Set when the pin comes from search / a named place so starring keeps the title.
     @State private var pinPlaceName: String?
 
@@ -78,6 +80,7 @@ struct MapHomeView: View {
                                 },
                                 onDragEnded: {
                                     isDraggingPin = false
+                                    scheduleRoutePreview()
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                         suppressNextMapTap = false
                                     }
@@ -119,8 +122,19 @@ struct MapHomeView: View {
         .onAppear {
             session.startLocationUpdates()
         }
-        .onChange(of: session.pin?.latitude) { _, newValue in
-            if newValue == nil { pinSelected = false }
+        .onChange(of: [session.pin?.latitude, session.pin?.longitude]) { _, _ in
+            if session.pin == nil { pinSelected = false }
+            scheduleRoutePreview()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .locusMoveSelected)) { _ in
+            moveToSelectedPin()
+        }
+        .onChange(of: session.travelMode) { _, _ in
+            scheduleRoutePreview(force: true)
+        }
+        .onDisappear {
+            previewTask?.cancel()
+            routeRequestID = UUID()
         }
         .onReceive(NotificationCenter.default.publisher(for: .locusImportGPX)) { note in
             guard let url = note.object as? URL else { return }
@@ -136,12 +150,21 @@ struct MapHomeView: View {
                 start: $routeStart,
                 end: $routeEnd,
                 isRouting: $isRouting,
+                distanceMeters: RouteBuilder.distance(routeCoords.isEmpty ? drawnPath : routeCoords),
                 onBuild: buildRoadRoute,
                 onPlay: playRoute,
                 onImportGPX: { showGPXImporter = true },
                 onExportGPX: exportGPX,
                 onUseDrawn: {
+                    previewTask?.cancel()
+                    routeRequestID = UUID()
                     routeCoords = RouteBuilder.sample(coordinates: drawnPath, every: 10)
+                    routeStart = routeCoords.first
+                    routeEnd = routeCoords.last
+                    session.pin = routeEnd
+                    session.previewDistanceMeters = RouteBuilder.distance(routeCoords)
+                    isRouting = false
+                    session.previewIsRouting = false
                     drawnPath.removeAll()
                     drawMode = false
                 }
@@ -186,12 +209,13 @@ struct MapHomeView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Search places", text: $searchText)
+            TextField("Search addresses or places", text: $searchText)
                 .textInputAutocapitalization(.words)
                 .focused($searchFocused)
                 .submitLabel(.search)
                 .onSubmit {
                     searchFocused = false
+                    searchAddress()
                 }
                 .onChange(of: searchText) { _, value in
                     search.query = value
@@ -355,24 +379,131 @@ struct MapHomeView: View {
     }
 
     private func buildRoadRoute() {
-        guard let start = routeStart ?? session.simulated ?? session.pin,
-              let end = routeEnd else {
-            session.lastError = "Set a route start and end."
+        guard let start = routeStart ?? session.simulated ?? session.realCoordinate,
+              let end = routeEnd ?? session.pin else {
+            session.lastError = "Select a destination and allow location access, or set a route start."
             return
         }
+        previewTask?.cancel()
+        calculateRoute(from: start, to: end)
+    }
+
+    private func calculateRoute(from start: CLLocationCoordinate2D, to end: CLLocationCoordinate2D, moveWhenReady: Bool = false) {
+        let requestID = UUID()
+        routeRequestID = requestID
+        routeStart = start
+        routeEnd = end
         isRouting = true
+        session.previewIsRouting = true
+        session.previewDistanceMeters = nil
+        let mode = session.travelMode
         Task {
             do {
-                let coords = try await RouteBuilder.roadRoute(from: start, to: end, mode: session.travelMode)
+                let coords = try await RouteBuilder.roadRoute(from: start, to: end, mode: mode)
                 await MainActor.run {
+                    guard routeRequestID == requestID else { return }
                     routeCoords = coords
                     isRouting = false
+                    session.previewIsRouting = false
+                    session.previewDistanceMeters = RouteBuilder.distance(coords)
+                    showRouteOnMap(coords)
+                    if moveWhenReady { playRoute() }
                 }
             } catch {
                 await MainActor.run {
+                    guard routeRequestID == requestID else { return }
                     isRouting = false
+                    session.previewIsRouting = false
+                    session.previewDistanceMeters = nil
                     session.lastError = error.localizedDescription
                 }
+            }
+        }
+    }
+
+    private func scheduleRoutePreview(force: Bool = false) {
+        guard !drawMode, !isDraggingPin else { return }
+        guard let destination = session.pin else {
+            previewTask?.cancel()
+            routeRequestID = UUID()
+            routeCoords = []
+            routeStart = nil
+            routeEnd = nil
+            isRouting = false
+            session.previewIsRouting = false
+            session.previewDistanceMeters = nil
+            return
+        }
+        if !force, let end = routeEnd, routeCoords.count > 1,
+           abs(end.latitude - destination.latitude) < 0.000001,
+           abs(end.longitude - destination.longitude) < 0.000001 { return }
+        previewTask?.cancel()
+        routeRequestID = UUID()
+        routeCoords = []
+        routeEnd = destination
+        session.previewDistanceMeters = nil
+        isRouting = false
+        session.previewIsRouting = false
+        guard let start = session.simulated ?? session.realCoordinate else { return }
+        previewTask = Task {
+            do { try await Task.sleep(nanoseconds: 350_000_000) } catch { return }
+            guard !Task.isCancelled else { return }
+            calculateRoute(from: start, to: destination)
+        }
+    }
+
+    private func moveToSelectedPin() {
+        guard let destination = session.pin else {
+            session.lastError = "Search an address or tap the map to choose a destination."
+            return
+        }
+        if routeCoords.count > 1 {
+            if let current = session.simulated ?? session.realCoordinate, let start = routeCoords.first {
+                let gap = CLLocation(latitude: current.latitude, longitude: current.longitude)
+                    .distance(from: CLLocation(latitude: start.latitude, longitude: start.longitude))
+                if gap >= 100 {
+                    calculateRoute(from: current, to: destination, moveWhenReady: true)
+                    return
+                }
+            }
+            playRoute()
+        } else if let start = session.simulated ?? session.realCoordinate {
+            calculateRoute(from: start, to: destination, moveWhenReady: true)
+        } else {
+            session.lastError = "Waiting for your current position. Allow location access or Teleport to a starting point."
+        }
+    }
+
+    private func showRouteOnMap(_ coordinates: [CLLocationCoordinate2D]) {
+        guard coordinates.count > 1 else { return }
+        let rect = coordinates.reduce(MKMapRect.null) { partial, coordinate in
+            let point = MKMapPoint(coordinate)
+            return partial.union(MKMapRect(x: point.x, y: point.y, width: 1, height: 1))
+        }
+        position = .rect(rect.insetBy(dx: -max(150, rect.width * 0.15), dy: -max(200, rect.height * 0.3)))
+    }
+
+    private func searchAddress() {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return }
+        Task {
+            let request = MKLocalSearch.Request()
+            request.naturalLanguageQuery = query
+            do {
+                let response = try await MKLocalSearch(request: request).start()
+                guard searchText.trimmingCharacters(in: .whitespacesAndNewlines) == query else { return }
+                guard let item = response.mapItems.first else {
+                    session.lastError = "No matching address found."
+                    return
+                }
+                session.pin = item.placemark.coordinate
+                pinPlaceName = item.name ?? query
+                position = .region(MKCoordinateRegion(center: item.placemark.coordinate, latitudinalMeters: 1200, longitudinalMeters: 1200))
+                session.pushNamedRecent(name: pinPlaceName ?? query, coordinate: item.placemark.coordinate)
+                searchText = ""
+                search.query = ""
+            } catch {
+                session.lastError = error.localizedDescription
             }
         }
     }
@@ -389,12 +520,17 @@ struct MapHomeView: View {
 
     private func importGPX(_ url: URL) {
         do {
+            previewTask?.cancel()
+            routeRequestID = UUID()
             let coords = try GPXCodec.parse(url)
             routeCoords = RouteBuilder.sample(coordinates: coords, every: 10)
-            if let first = coords.first {
-                session.pin = first
-                position = .region(MKCoordinateRegion(center: first, latitudinalMeters: 2000, longitudinalMeters: 2000))
-            }
+            routeStart = coords.first
+            routeEnd = coords.last
+            session.pin = coords.last
+            isRouting = false
+            session.previewIsRouting = false
+            session.previewDistanceMeters = RouteBuilder.distance(routeCoords)
+            showRouteOnMap(routeCoords)
         } catch {
             session.lastError = error.localizedDescription
         }

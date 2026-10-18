@@ -3,6 +3,12 @@ import Foundation
 import MapKit
 
 enum RouteBuilder {
+    static func distance(_ coordinates: [CLLocationCoordinate2D]) -> CLLocationDistance {
+        zip(coordinates, coordinates.dropFirst()).reduce(0) { total, pair in
+            total + CLLocation(latitude: pair.0.latitude, longitude: pair.0.longitude)
+                .distance(from: CLLocation(latitude: pair.1.latitude, longitude: pair.1.longitude))
+        }
+    }
     static func roadRoute(
         from start: CLLocationCoordinate2D,
         to end: CLLocationCoordinate2D,

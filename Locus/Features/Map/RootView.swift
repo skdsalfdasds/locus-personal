@@ -2,6 +2,7 @@ import SwiftUI
 import NetworkExtension
 
 struct RootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var session: SpoofSession
     @EnvironmentObject private var pairing: PairingStore
     @State private var showSettings = false
@@ -22,6 +23,10 @@ struct RootView: View {
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        .onAppear { session.refreshAfterForeground(pairing: pairing) }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { session.refreshAfterForeground(pairing: pairing) }
         }
         .sheet(isPresented: $showPlaces) {
             PlacesView()
@@ -56,7 +61,10 @@ struct StatusBarView: View {
         case .connecting:
             return .status("Connecting…")
         case .active:
-            return .status("Spoofing")
+            if session.routeRunning {
+                return .status(session.routePaused ? "Movement paused" : "Moving")
+            }
+            return .status(session.holdingDestination ? "Holding location" : "Spoofing")
         case .reconnecting:
             return .status("Reconnecting…")
         case .dropped(let reason):
@@ -193,6 +201,51 @@ struct BottomControlsView: View {
                 Spacer(minLength: 0)
             }
 
+            SpeedControlView()
+
+            if session.routeRunning {
+                RouteEstimateView(distanceMeters: session.routeRemainingMeters)
+            } else if let distance = session.previewDistanceMeters {
+                RouteEstimateView(distanceMeters: distance)
+            } else if session.previewIsRouting {
+                HStack {
+                    ProgressView()
+                    Text("Finding road route…").font(.caption)
+                    Spacer()
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    NotificationCenter.default.post(name: .locusMoveSelected, object: nil)
+                } label: {
+                    Label("Move", systemImage: "play.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(session.pin == nil || session.previewIsRouting || session.isBusy)
+
+                Button {
+                    guard let pin = session.pin else { return }
+                    session.teleport(to: pin, pairing: pairing)
+                } label: {
+                    Label("Teleport", systemImage: "location.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .disabled(session.pin == nil || session.isBusy)
+            }
+            .font(.subheadline.weight(.semibold))
+            .buttonStyle(.borderedProminent)
+            .tint(LocusTheme.accent)
+            .foregroundStyle(.black)
+
+            if session.routeRunning {
+                Button(session.routePaused ? "Resume movement" : "Pause movement") {
+                    session.toggleRoutePause()
+                }
+                .font(.subheadline.weight(.semibold))
+                .buttonStyle(.plain)
+            }
+
             HStack(spacing: 10) {
                 trayIcon("gearshape.fill") { showSettings = true }
                 trayIcon("star.fill") { showPlaces = true }
@@ -220,7 +273,7 @@ struct BottomControlsView: View {
                 }
                 .buttonStyle(.plain)
 
-                if session.isSpoofing {
+                if session.simulated != nil || session.routeRunning {
                     Button {
                         session.stop(pairing: pairing)
                     } label: {
@@ -234,25 +287,6 @@ struct BottomControlsView: View {
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
-                } else {
-                    Button {
-                        guard let pin = session.pin else {
-                            session.lastError = "Tap the map to drop a pin first."
-                            return
-                        }
-                        session.teleport(to: pin, pairing: pairing)
-                    } label: {
-                        Text("Teleport")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(.black)
-                            .frame(minWidth: 96)
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 10)
-                            .background(Capsule().fill(LocusTheme.accent))
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(session.isBusy)
                 }
             }
         }
