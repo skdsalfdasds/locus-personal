@@ -1,6 +1,21 @@
 Build and local validation (October 18, 2026)
 
-LATEST: version 1.3.2 / build 10, source f92ed0c (includes 1.3.1 source d1bd81e).
+LATEST: version 1.4.0 / build 11, source 969d4a8.
+PASS: full Release iPhone build and all existing native checks.
+PASS: continuous deterministic variation remains bounded; bends reduce target speed.
+PASS: baseline changes respect acceleration/braking limits; manual timing stays exact with variation off.
+PASS: traffic ETA changes average speed; invalid estimates and speed bounds handled.
+PASS: cached automatic speed/time survives recovery; manual routes do not retain stale traffic metadata.
+PASS: route geometry distinguishes bends, straight paths, and repeated points.
+PASS: downloaded IPA archive integrity and bundle/version/build metadata.
+SOURCE CHECKED: startup Automatic mode; calculateETA expected traffic; five-minute cache refresh.
+SOURCE CHECKED: draw points, Undo/Cancel/Use manual route preserve the chosen custom path.
+Build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39117427248
+IPA: outputs/Locus-1.4.0-unsigned.ipa (also outputs/Locus-personal-unsigned.ipa)
+SHA256: 4bedf1349281c52e8631b580f85fdaa2ae3204a88e78d38a3b5924fed45ca18f
+PENDING: physical-iPhone UI and drawing, live Apple Maps traffic estimates, background playback.
+
+Previous version 1.3.2 / build 10, source f92ed0c (includes 1.3.1 source d1bd81e):
 PASS: full Release iPhone build and all existing native safety/persistence checks.
 PASS: remaining route line starts at the current playback position and removes traveled segments.
 PASS: repeated coordinates/crossings retain correct waypoint order; completed paths draw no stale line.

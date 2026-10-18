@@ -35,11 +35,37 @@ for the build. The resulting IPA is unsigned and must be signed/sideloaded local
 5. Import your own RPPairing file and use LocalDevVPN, as described in SETUP.md.
 
 The workflow does not publish a release or upload Apple signing credentials.
-This derivative uses bundle identifier `com.locus.personal` and version 1.3.2.
+This derivative uses bundle identifier `com.locus.personal` and version 1.4.0.
 Public repositories with standard hosted runners have free Actions builds;
 private repositories use the account's Actions allowance and may incur charges.
 
 ## Verification status
+
+Version 1.4.0 (build 11) defaults to Automatic. Road-route distance divided by
+MapKit calculateETA's traffic-aware expected travel time sets the average speed,
+bounded to 0.1–85 MPH. Estimates refresh after about five minutes, with cached
+speed retained during internet failures. This is an overall pace estimate, not
+per-road traffic, posted speed limits, or traffic-light simulation.
+
+Smooth speed variation replaces independent random samples with continuous
+50-second and 19-second drift components, totaling up to 4% in either direction.
+Upcoming bends within 60 meters lower the target by up to another 4%. Changes
+are limited to 0.35 m/s² acceleration and 0.55 m/s² braking. The profile starts
+at the selected average speed; it does not simulate accelerating from rest.
+Turning variation off uses the selected average directly. Pauses and failed
+location sends do not advance the movement clock or route cursor.
+
+Draw route now displays numbered tap points, a path, instructions, Undo, Cancel,
+and Use manual route. It joins tapped waypoints with straight segments, then
+keeps that route for Move. Drawing and GPX switch Automatic to manual Drive,
+retaining the user's manual MPH. Selecting Automatic rebuilds a road route.
+
+Full Release build and native timing, speed-change limits, bends, ETA/cache
+recovery, saved-state, hold confirmation, connection failure, and tunnel checks passed:
+https://github.com/skdsalfdasds/locus-personal/actions/runs/39117427248
+IPA archive integrity and version/build metadata passed local inspection.
+Physical-iPhone UI, live Apple Maps traffic requests, and background behavior
+with this release remain unverified.
 
 Version 1.3.2 (build 10) trims the active route polyline from the last confirmed
 position through the remaining waypoints. It uses playback's waypoint cursor so
