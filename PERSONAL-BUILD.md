@@ -35,11 +35,23 @@ for the build. The resulting IPA is unsigned and must be signed/sideloaded local
 5. Import your own RPPairing file and use LocalDevVPN, as described in SETUP.md.
 
 The workflow does not publish a release or upload Apple signing credentials.
-This derivative uses bundle identifier `com.locus.personal` and version 1.3.0.
+This derivative uses bundle identifier `com.locus.personal` and version 1.3.2.
 Public repositories with standard hosted runners have free Actions builds;
 private repositories use the account's Actions allowance and may incur charges.
 
 ## Verification status
+
+Version 1.3.2 (build 10) trims the active route polyline from the last confirmed
+position through the remaining waypoints. It uses playback's waypoint cursor so
+crossings and loops cannot skip ahead. Pauses and failed sends retain the current
+line; arrival or Stop removes it without redisplaying the full original preview.
+The full source path remains available for GPX export.
+
+Version 1.3.1 (build 9) restores the standard MapKit blue location indicator during
+route and joystick movement and initializes travel mode to Drive. Saved custom MPH
+is retained. Walk/Run use walking directions; Bike/Drive currently use automobile
+directions, with different preset speeds. Bike does not request bicycle-specific
+routing. The extra simulated-location circle/annotation remains removed.
 
 Version 1.3.0 (build 8) consolidates the map tray to speed/options, ETA, and contextual
 movement actions. Travel modes, speed, variation, joystick, saved places, settings,

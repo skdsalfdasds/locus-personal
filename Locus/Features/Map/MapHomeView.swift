@@ -12,6 +12,7 @@ struct MapHomeView: View {
     @State private var routeStart: CLLocationCoordinate2D?
     @State private var routeEnd: CLLocationCoordinate2D?
     @State private var routeCoords: [CLLocationCoordinate2D] = []
+    @State private var routePreviewConsumed = false
     @State private var isRouting = false
     @State private var showRouteSheet = false
     @State private var showGPXImporter = false
@@ -88,7 +89,12 @@ struct MapHomeView: View {
                             )
                         }
                     }
-                    if routeCoords.count > 1 {
+                    if session.routeRunning {
+                        if session.remainingRouteCoordinates.count > 1 {
+                            MapPolyline(coordinates: session.remainingRouteCoordinates)
+                                .stroke(LocusTheme.accent, lineWidth: 5)
+                        }
+                    } else if !routePreviewConsumed, routeCoords.count > 1 {
                         MapPolyline(coordinates: routeCoords)
                             .stroke(LocusTheme.accent, lineWidth: 5)
                     }
@@ -112,6 +118,18 @@ struct MapHomeView: View {
         }
         .onAppear {
             session.startLocationUpdates()
+            if session.routeRunning { routePreviewConsumed = true }
+        }
+        .onChange(of: session.routeRunning) { _, running in
+            if running {
+                routePreviewConsumed = true
+                previewTask?.cancel()
+                routeRequestID = UUID()
+                isRouting = false
+                session.previewIsRouting = false
+                drawnPath.removeAll()
+                drawMode = false
+            }
         }
         .onChange(of: [session.pin?.latitude, session.pin?.longitude]) { _, _ in
             if session.pin == nil { pinSelected = false }
@@ -150,6 +168,7 @@ struct MapHomeView: View {
                     previewTask?.cancel()
                     routeRequestID = UUID()
                     routeCoords = RouteBuilder.sample(coordinates: drawnPath, every: 10)
+                    routePreviewConsumed = false
                     routeStart = routeCoords.first
                     routeEnd = routeCoords.last
                     session.pin = routeEnd
@@ -387,6 +406,7 @@ struct MapHomeView: View {
                 await MainActor.run {
                     guard routeRequestID == requestID else { return }
                     routeCoords = coords
+                    routePreviewConsumed = false
                     isRouting = false
                     session.previewIsRouting = false
                     session.previewDistanceMeters = RouteBuilder.distance(coords)
@@ -500,6 +520,7 @@ struct MapHomeView: View {
         }
         showRouteSheet = false
         session.followRoute(path, pairing: pairing)
+        if session.routeRunning { routePreviewConsumed = true }
     }
 
     private func importGPX(_ url: URL) {
@@ -508,6 +529,7 @@ struct MapHomeView: View {
             routeRequestID = UUID()
             let coords = try GPXCodec.parse(url)
             routeCoords = RouteBuilder.sample(coordinates: coords, every: 10)
+            routePreviewConsumed = false
             routeStart = coords.first
             routeEnd = coords.last
             session.pin = coords.last

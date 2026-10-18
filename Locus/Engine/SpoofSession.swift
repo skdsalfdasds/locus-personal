@@ -85,6 +85,7 @@ final class SpoofSession: ObservableObject {
     @Published private(set) var routeRunning = false
     @Published private(set) var routePaused = false
     @Published private(set) var routeRemainingMeters: Double = 0
+    @Published private(set) var remainingRouteCoordinates: [CLLocationCoordinate2D] = []
     @Published private(set) var holdingDestination = false
     @Published var previewDistanceMeters: Double?
     @Published var previewIsRouting = false
@@ -109,6 +110,7 @@ final class SpoofSession: ObservableObject {
     private let playbackStore = PlaybackStore()
     private var holdTarget: CLLocationCoordinate2D?
     private var nextWaypoint = 1
+    private var activeRouteCoordinates: [CLLocationCoordinate2D] = []
     private var restorePending = false
 
     private let favoritesKey = "locus.favorites"
@@ -270,6 +272,8 @@ final class SpoofSession: ObservableObject {
         routeRunning = true
         routePaused = initiallyPaused
         nextWaypoint = 1
+        activeRouteCoordinates = coordinates
+        previewDistanceMeters = nil
         holdTarget = nil
         holdingDestination = false
         routeRemainingMeters = RouteBuilder.distance(coordinates)
@@ -327,6 +331,8 @@ final class SpoofSession: ObservableObject {
                 previous = next
             }
             self.routeRemainingMeters = 0
+            self.remainingRouteCoordinates = []
+            self.activeRouteCoordinates = []
             self.holdTarget = previous
             self.playbackStore.setHold(Self.storedPoint(previous))
             self.holdingDestination = true
@@ -392,6 +398,8 @@ final class SpoofSession: ObservableObject {
         routeRunning = false
         routePaused = false
         routeRemainingMeters = 0
+        remainingRouteCoordinates = []
+        activeRouteCoordinates = []
         stopJoystick()
     }
 
@@ -483,6 +491,10 @@ final class SpoofSession: ObservableObject {
         switch result {
         case .success:
             simulated = coordinate
+            if routeRunning {
+                remainingRouteCoordinates = RouteLine.remaining(activeRouteCoordinates, from: coordinate,
+                                                                nextWaypoint: nextWaypoint)
+            }
             if !routeRunning {
                 playbackStore.setHold(Self.storedPoint(holdTarget ?? coordinate))
             }

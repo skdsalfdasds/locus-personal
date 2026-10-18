@@ -42,6 +42,11 @@ jobs:
           set -euo pipefail
           swiftc Locus/Engine/PlaybackStore.swift Tests/PlaybackStoreChecks.swift -o "$RUNNER_TEMP/playback-checks" 2>&1 | tee outputs/playback-checks.log
           "$RUNNER_TEMP/playback-checks" 2>&1 | tee -a outputs/playback-checks.log
+      - name: Check remaining route geometry
+        run: |
+          set -euo pipefail
+          swiftc Locus/Engine/RouteLine.swift Tests/RouteLineChecks.swift -o "$RUNNER_TEMP/route-line-checks" 2>&1 | tee outputs/route-line-checks.log
+          "$RUNNER_TEMP/route-line-checks" 2>&1 | tee -a outputs/route-line-checks.log
       - name: Check developer tunnel detection
         run: |
           set -euo pipefail
@@ -59,5 +64,6 @@ jobs:
             outputs/tunnel-checks.log
             outputs/playback-checks.log
             outputs/safety-checks.log
+            outputs/route-line-checks.log
           retention-days: 7
           if-no-files-found: error
