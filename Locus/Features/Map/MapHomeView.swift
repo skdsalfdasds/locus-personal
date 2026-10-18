@@ -265,29 +265,33 @@ struct MapHomeView: View {
     }
 
     private var mapChromeButtons: some View {
-        HStack(spacing: 4) {
-            chromeIconButton("square.3.layers.3d") {
-                session.mapStyleIndex = (session.mapStyleIndex + 1) % 3
+        Menu {
+            Picker("Map style", selection: $session.mapStyleIndex) {
+                Text("Standard").tag(0)
+                Text("Hybrid").tag(1)
+                Text("Satellite").tag(2)
             }
-            chromeIconButton("point.topleft.down.to.point.bottomright.curvepath") {
+            Button("Routes and GPX", systemImage: "point.topleft.down.to.point.bottomright.curvepath") {
                 showRouteSheet = true
             }
-            chromeIconButton(drawMode ? "pencil.tip.crop.circle.badge.minus" : "pencil.tip.crop.circle") {
+            Button(drawMode ? "Finish drawing" : "Draw route", systemImage: "pencil.tip") {
                 drawMode.toggle()
                 if !drawMode { drawnPath.removeAll() }
             }
-            .foregroundStyle(drawMode ? LocusTheme.accentSecondary : .primary)
-
             if session.pin != nil {
-                chromeIconButton("star.circle") {
+                Button("Save selected place", systemImage: "star") {
                     if let pin = session.pin {
                         let name = session.suggestedFavoriteName(for: pin, fallback: pinPlaceName)
                         session.addFavorite(name: name, coordinate: pin)
                     }
                 }
             }
+        } label: {
+            Label(drawMode ? "Drawing" : "Map tools", systemImage: drawMode ? "pencil.tip" : "map")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
         }
-        .padding(6)
         .locusGlass(.clear, in: Capsule())
         .contentShape(Capsule())
     }
@@ -337,17 +341,6 @@ struct MapHomeView: View {
                 )
             }
         }
-    }
-
-    private func chromeIconButton(_ systemName: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.body.weight(.semibold))
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.primary)
     }
 
     private func select(completion: MKLocalSearchCompletion) {

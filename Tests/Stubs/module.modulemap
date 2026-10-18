@@ -1,0 +1,5 @@
+module idevice {
+    header "../../Vendor/idevice/idevice.h"
+    header "idevice_stub.h"
+    export *
+}

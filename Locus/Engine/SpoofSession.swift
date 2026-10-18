@@ -131,6 +131,8 @@ final class SpoofSession: ObservableObject {
         routeRunning || joystickActive || holdTarget != nil || simulated != nil || restorePending
     }
 
+    var requiresRestoreRetry: Bool { restorePending }
+
     func teleport(to coordinate: CLLocationCoordinate2D, pairing: PairingStore) {
         guard pairing.hasPairingFile else {
             lastError = "Import an RPPairing file in Settings first."
@@ -170,7 +172,8 @@ final class SpoofSession: ObservableObject {
         }
     }
 
-    func restoreRealLocation(pairing: PairingStore) {
+    func restoreRealLocation(pairing: PairingStore, confirmation: HoldConfirmation.Permit) {
+        guard confirmation.isValid(at: ProcessInfo.processInfo.systemUptime) else { return }
         cancelMovement()
         restorePending = true
         holdingDestination = false
@@ -194,7 +197,7 @@ final class SpoofSession: ObservableObject {
         case .failure(let error):
             lastError = "Could not restore real location: \(error.localizedDescription) Keep LocalDevVPN connected and retry. If it still fails, restart the iPhone."
             status = .dropped(error.localizedDescription)
-            postDropNotification(error.localizedDescription)
+            postDropNotification(error.localizedDescription, restoring: true)
         }
     }
 
@@ -495,6 +498,12 @@ final class SpoofSession: ObservableObject {
             }
             return true
         case .failure(let error):
+            // An interruption never clears persistent intent or sends a clear
+            // command. Freeze the route at its last confirmed cursor and retry.
+            saveRouteCheckpoint(force: true)
+            if !routeRunning, let saved = holdTarget ?? simulated {
+                playbackStore.setHold(Self.storedPoint(saved))
+            }
             if reportError { lastError = error.localizedDescription }
             if simulated != nil || holdTarget != nil || routeRunning {
                 status = .dropped(error.localizedDescription)
@@ -608,11 +617,11 @@ final class SpoofSession: ObservableObject {
         backgroundTask = .invalid
     }
 
-    private func postDropNotification(_ message: String) {
+    private func postDropNotification(_ message: String, restoring: Bool = false) {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         let content = UNMutableNotificationContent()
-        content.title = "Locus spoof dropped"
-        content.body = message
+        content.title = restoring ? "Location restore failed" : "Locus connection interrupted"
+        content.body = restoring ? message : "Saved location kept. Retrying the developer tunnel. \(message)"
         content.sound = .default
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)

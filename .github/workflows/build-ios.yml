@@ -28,6 +28,15 @@ jobs:
           "$RUNNER_TEMP/movement-checks" 2>&1 | tee -a outputs/timing-checks.log
       - name: Build unsigned device IPA
         run: bash scripts/build-unsigned-ios.sh
+      - name: Check restore hold confirmation and connection failure behavior
+        run: |
+          set -euo pipefail
+          swiftc Locus/Support/HoldConfirmation.swift Tests/HoldConfirmationChecks.swift -o "$RUNNER_TEMP/hold-checks" 2>&1 | tee outputs/safety-checks.log
+          "$RUNNER_TEMP/hold-checks" 2>&1 | tee -a outputs/safety-checks.log
+          mkdir -p "$RUNNER_TEMP/engine-stubs"
+          clang -dynamiclib Tests/Stubs/idevice_stub.c -o "$RUNNER_TEMP/engine-stubs/libidevice_ffi.dylib"
+          swiftc -I Tests/Stubs -L "$RUNNER_TEMP/engine-stubs" -lidevice_ffi Locus/Engine/LocationEngine.swift Tests/LocationEngineChecks.swift -o "$RUNNER_TEMP/engine-checks" 2>&1 | tee -a outputs/safety-checks.log
+          DYLD_LIBRARY_PATH="$RUNNER_TEMP/engine-stubs" "$RUNNER_TEMP/engine-checks" 2>&1 | tee -a outputs/safety-checks.log
       - name: Check saved route and hold recovery
         run: |
           set -euo pipefail
@@ -49,5 +58,6 @@ jobs:
             outputs/timing-checks.log
             outputs/tunnel-checks.log
             outputs/playback-checks.log
+            outputs/safety-checks.log
           retention-days: 7
           if-no-files-found: error

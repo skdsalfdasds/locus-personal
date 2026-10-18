@@ -78,8 +78,8 @@ struct StatusBarView: View {
             return .status(session.holdingDestination ? "Holding location" : "Spoofing")
         case .reconnecting:
             return .status("Reconnecting…")
-        case .dropped(let reason):
-            return .status(reason.isEmpty ? "Disconnected" : "Disconnected — \(reason)")
+        case .dropped:
+            return .status(session.requiresRestoreRetry ? "Restore failed · Retry in More" : "Connection interrupted · Retrying")
         }
     }
 
@@ -103,8 +103,8 @@ struct StatusBarView: View {
 
     private var title: String {
         switch display {
-        case .notSpoofing: return "Tunnel ready · Choose a destination"
-        case .connectVPN: return "Tunnel not responding · Open VPN"
+        case .notSpoofing: return "Ready"
+        case .connectVPN: return "Open LocalDevVPN"
         case .checking: return "Checking developer tunnel…"
         case .status(let text): return text
         }
@@ -158,12 +158,6 @@ struct StatusBarView: View {
                 Image(systemName: "lock.shield.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(LocusTheme.accent)
-            } else if case .active = session.status, let sim = session.simulated {
-                Text(String(format: "%.4f, %.4f", sim.latitude, sim.longitude))
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
             }
         }
         .padding(.horizontal, 14)
@@ -172,173 +166,6 @@ struct StatusBarView: View {
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
-}
-
-struct BottomControlsView: View {
-    @EnvironmentObject private var session: SpoofSession
-    @EnvironmentObject private var pairing: PairingStore
-    @Binding var showSettings: Bool
-    @Binding var showPlaces: Bool
-
-    private let trayShape = RoundedRectangle(cornerRadius: 28, style: .continuous)
-
-    var body: some View {
-        VStack(spacing: 12) {
-            if session.joystickActive {
-                JoystickPad { vector in
-                    session.updateJoystick(vector: vector)
-                }
-                .frame(width: 148, height: 148)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-
-            HStack(spacing: 8) {
-                ForEach(TravelMode.allCases) { mode in
-                    let selected = session.travelMode == mode
-                    Button {
-                        session.travelMode = mode
-                    } label: {
-                        Image(systemName: mode.icon)
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(selected ? .black : .primary)
-                            .frame(width: 44, height: 40)
-                            .background(
-                                Capsule().fill(selected ? LocusTheme.accent : Color.primary.opacity(0.08))
-                            )
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer(minLength: 0)
-            }
-
-            SpeedControlView()
-
-            if session.routeRunning {
-                RouteEstimateView(distanceMeters: session.routeRemainingMeters)
-            } else if let distance = session.previewDistanceMeters {
-                RouteEstimateView(distanceMeters: distance)
-            } else if session.previewIsRouting {
-                HStack {
-                    ProgressView()
-                    Text("Finding road route…").font(.caption)
-                    Spacer()
-                }
-            }
-
-            HStack(spacing: 10) {
-                Button {
-                    NotificationCenter.default.post(name: .locusMoveSelected, object: nil)
-                } label: {
-                    Label("Move", systemImage: "play.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .disabled(session.pin == nil || session.previewIsRouting || session.isBusy)
-
-                Button {
-                    guard let pin = session.pin else { return }
-                    session.teleport(to: pin, pairing: pairing)
-                } label: {
-                    Label("Teleport", systemImage: "location.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .disabled(session.pin == nil || session.isBusy)
-            }
-            .font(.subheadline.weight(.semibold))
-            .buttonStyle(LocusActionButtonStyle())
-
-            if session.pin == nil {
-                Text("Choose an address or map point to enable Move and Teleport.")
-                    .font(.caption)
-                    .foregroundStyle(.primary.opacity(0.8))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            if session.routeRunning {
-                Button(session.routePaused ? "Resume movement" : "Pause movement") {
-                    session.toggleRoutePause()
-                }
-                .font(.subheadline.weight(.semibold))
-                .buttonStyle(.plain)
-            }
-
-            HStack(spacing: 10) {
-                trayIcon("gearshape.fill") { showSettings = true }
-                trayIcon("star.fill") { showPlaces = true }
-
-                Button {
-                    if session.joystickActive {
-                        session.stopJoystick()
-                    } else {
-                        session.startJoystick(pairing: pairing)
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "dot.circle.and.hand.point.up.left.fill")
-                        Text(session.joystickActive ? "On" : "Joy")
-                            .lineLimit(1)
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(session.joystickActive ? .black : .primary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(
-                        Capsule().fill(session.joystickActive ? LocusTheme.accentSecondary : Color.primary.opacity(0.08))
-                    )
-                    .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-
-                if session.hasLocationIntent {
-                    Button {
-                        session.stop(pairing: pairing)
-                    } label: {
-                        Text("Stop")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(.white)
-                            .frame(minWidth: 72)
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 8)
-                            .background(Capsule().fill(LocusTheme.danger))
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Stop movement and hold the current simulated location")
-                }
-            }
-
-            if session.hasLocationIntent {
-                Button {
-                    session.restoreRealLocation(pairing: pairing)
-                } label: {
-                    Label("Restore real location", systemImage: "location.slash")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(Color.primary.opacity(0.08)))
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Remove the simulated location and stop automatic restoration")
-            }
-        }
-        .padding(14)
-        .locusGlass(.regular, in: trayShape)
-        // Whole tray absorbs taps so near-misses don't fall through to the map.
-        .contentShape(trayShape)
-    }
-
-    private func trayIcon(_ systemName: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(Color.primary.opacity(0.08)))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 struct IconButton: View {
