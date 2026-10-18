@@ -102,6 +102,13 @@ struct SettingsView: View {
                     Text("Connect LocalDevVPN before teleporting. Default tunnel IP is 10.7.0.1. Status checks the developer endpoint, not another app’s VPN switch. If it does not respond, check the IP and Local Network permission. Start on Wi‑Fi first.")
                 }
 
+                Section("Background playback") {
+                    Text("Start movement with Locus open, then lock the screen or switch apps. Keep LocalDevVPN connected and allow Location access to Always in iPhone Settings.")
+                    Text("Arrival holds the destination until Stop. Reopening restores a saved hold or resumes saved route progress. Swiping Locus away, restarting, or powering off can interrupt updates; the app cannot keep running after force quit.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
                 Section("Privacy") {
                     Text("Fully on-device. Favorites and recents stay in UserDefaults. No analytics, no accounts, nothing uploaded.")
                         .font(.footnote)

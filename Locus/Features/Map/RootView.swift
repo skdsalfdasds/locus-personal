@@ -25,7 +25,14 @@ struct RootView: View {
         }
         .onAppear { session.refreshAfterForeground(pairing: pairing) }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { session.refreshAfterForeground(pairing: pairing) }
+            if phase == .active {
+                session.refreshAfterForeground(pairing: pairing)
+            } else {
+                session.prepareForBackground(pairing: pairing)
+            }
+        }
+        .onChange(of: pairing.hasPairingFile) { _, hasFile in
+            if hasFile { session.refreshAfterForeground(pairing: pairing) }
         }
         .sheet(isPresented: $showPlaces) {
             PlacesView()
@@ -282,7 +289,7 @@ struct BottomControlsView: View {
                 }
                 .buttonStyle(.plain)
 
-                if session.simulated != nil || session.routeRunning {
+                if session.hasLocationIntent {
                     Button {
                         session.stop(pairing: pairing)
                     } label: {

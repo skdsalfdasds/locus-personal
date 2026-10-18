@@ -28,6 +28,11 @@ jobs:
           "$RUNNER_TEMP/movement-checks" 2>&1 | tee -a outputs/timing-checks.log
       - name: Build unsigned device IPA
         run: bash scripts/build-unsigned-ios.sh
+      - name: Check saved route and hold recovery
+        run: |
+          set -euo pipefail
+          swiftc Locus/Engine/PlaybackStore.swift Tests/PlaybackStoreChecks.swift -o "$RUNNER_TEMP/playback-checks" 2>&1 | tee outputs/playback-checks.log
+          "$RUNNER_TEMP/playback-checks" 2>&1 | tee -a outputs/playback-checks.log
       - name: Check developer tunnel detection
         run: |
           set -euo pipefail
@@ -43,5 +48,6 @@ jobs:
             outputs/build.log
             outputs/timing-checks.log
             outputs/tunnel-checks.log
+            outputs/playback-checks.log
           retention-days: 7
           if-no-files-found: error

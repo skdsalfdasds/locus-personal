@@ -106,6 +106,9 @@ final class SpoofSession: ObservableObject {
     private var joystickVector: CGVector = .zero
     private let locationKeeper = BackgroundKeepAlive()
     private let audioKeeper = SilentAudioKeepAlive()
+    private let playbackStore = PlaybackStore()
+    private var holdTarget: CLLocationCoordinate2D?
+    private var nextWaypoint = 1
 
     private let favoritesKey = "locus.favorites"
     private let recentsKey = "locus.recents"
@@ -123,6 +126,10 @@ final class SpoofSession: ObservableObject {
         return false
     }
 
+    var hasLocationIntent: Bool {
+        routeRunning || joystickActive || holdTarget != nil || simulated != nil
+    }
+
     func teleport(to coordinate: CLLocationCoordinate2D, pairing: PairingStore) {
         guard pairing.hasPairingFile else {
             lastError = "Import an RPPairing file in Settings first."
@@ -131,13 +138,17 @@ final class SpoofSession: ObservableObject {
         cancelMovement()
         previewDistanceMeters = nil
         pin = coordinate
+        holdTarget = coordinate
+        playbackStore.setHold(Self.storedPoint(coordinate))
+        prepareForBackground(pairing: pairing)
         holdingDestination = apply(coordinate, pairing: pairing, markRecent: true)
     }
 
     func stop(pairing: PairingStore) {
         cancelMovement()
         holdingDestination = false
-        UserDefaults.standard.removeObject(forKey: "locus.holdCoordinate")
+        holdTarget = nil
+        playbackStore.clear()
         stopResend()
         stopHealth()
         if simulated == nil, !LocationEngine.isSessionActive {
@@ -185,6 +196,8 @@ final class SpoofSession: ObservableObject {
             return
         }
         cancelMovement()
+        playbackStore.clearRoute()
+        holdTarget = nil
         holdingDestination = false
         if simulated == nil {
             apply(start, pairing: pairing, markRecent: false)
@@ -209,13 +222,14 @@ final class SpoofSession: ObservableObject {
         joystickTimer = nil
     }
 
-    func followRoute(_ coordinates: [CLLocationCoordinate2D], pairing: PairingStore) {
+    func followRoute(_ coordinates: [CLLocationCoordinate2D], pairing: PairingStore,
+                     restoring: Bool = false, initiallyPaused: Bool = false) {
         guard pairing.hasPairingFile else {
             lastError = "Import an RPPairing file in Settings first."
             return
         }
         guard coordinates.count >= 2 else { return }
-        if let current = simulated ?? realCoordinate {
+        if !restoring, let current = simulated ?? realCoordinate {
             let gap = CLLocation(latitude: current.latitude, longitude: current.longitude)
                 .distance(from: CLLocation(latitude: coordinates[0].latitude, longitude: coordinates[0].longitude))
             guard gap < 100 else {
@@ -226,8 +240,13 @@ final class SpoofSession: ObservableObject {
         cancelMovement()
         let currentRouteID = routeID
         routeRunning = true
+        routePaused = initiallyPaused
+        nextWaypoint = 1
+        holdTarget = nil
         holdingDestination = false
         routeRemainingMeters = RouteBuilder.distance(coordinates)
+        playbackStore.beginRoute(coordinates.map(Self.storedPoint), paused: initiallyPaused)
+        prepareForBackground(pairing: pairing)
         routeTask = Task { [weak self] in
             guard let self else { return }
             defer {
@@ -239,11 +258,14 @@ final class SpoofSession: ObservableObject {
             }
             guard !Task.isCancelled else { return }
             var previous = coordinates[0]
-            while !self.apply(previous, pairing: pairing, markRecent: true) {
+            var started = self.apply(previous, pairing: pairing, markRecent: true)
+            while !started {
                 do { try await Task.sleep(nanoseconds: 2_000_000_000) } catch { return }
                 guard !Task.isCancelled else { return }
+                started = self.apply(previous, pairing: pairing, markRecent: false, reportError: false)
             }
-            for next in coordinates.dropFirst() {
+            for (index, next) in coordinates.enumerated().dropFirst() {
+                self.nextWaypoint = index
                 guard !Task.isCancelled else { return }
                 let distance = CLLocation(latitude: previous.latitude, longitude: previous.longitude)
                     .distance(from: CLLocation(latitude: next.latitude, longitude: next.longitude))
@@ -267,15 +289,18 @@ final class SpoofSession: ObservableObject {
                     }
                     guard !Task.isCancelled else { return }
                     // Keep the route cursor in place during tunnel failures instead of skipping ahead.
-                    while !self.apply(coord, pairing: pairing, markRecent: false) {
+                    while !self.apply(coord, pairing: pairing, markRecent: false, reportError: false) {
                         do { try await Task.sleep(nanoseconds: 2_000_000_000) } catch { return }
                         guard !Task.isCancelled else { return }
                     }
                     self.routeRemainingMeters = max(0, self.routeRemainingMeters - distance / Double(steps))
+                    self.saveRouteCheckpoint()
                 }
                 previous = next
             }
             self.routeRemainingMeters = 0
+            self.holdTarget = previous
+            self.playbackStore.setHold(Self.storedPoint(previous))
             self.holdingDestination = true
         }
     }
@@ -287,18 +312,49 @@ final class SpoofSession: ObservableObject {
     func toggleRoutePause() {
         guard routeRunning else { return }
         routePaused.toggle()
+        saveRouteCheckpoint(force: true)
     }
 
     func refreshAfterForeground(pairing: PairingStore) {
         guard pairing.hasPairingFile else { return }
-        guard UserDefaults.standard.array(forKey: "locus.holdCoordinate") != nil || routeRunning || joystickActive else { return }
-        if let current = simulated {
+        if routeRunning || joystickActive {
+            prepareForBackground(pairing: pairing)
+            if let current = simulated {
+                _ = apply(current, pairing: pairing, markRecent: false)
+            }
+        } else if let savedRoute = playbackStore.recoverRoute() {
+            let coordinates = savedRoute.remaining.map {
+                CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
+            }
+            pin = coordinates.last
+            followRoute(coordinates, pairing: pairing, restoring: true, initiallyPaused: savedRoute.paused)
+        } else if let saved = playbackStore.hold {
+            holdTarget = CLLocationCoordinate2D(latitude: saved.latitude, longitude: saved.longitude)
+            prepareForBackground(pairing: pairing)
+            if let holdTarget {
+                holdingDestination = apply(holdTarget, pairing: pairing, markRecent: false)
+            }
+        } else if let current = simulated {
             _ = apply(current, pairing: pairing, markRecent: false)
-        } else if let saved = UserDefaults.standard.array(forKey: "locus.holdCoordinate") as? [Double],
-                  saved.count == 2, (-90...90).contains(saved[0]), (-180...180).contains(saved[1]) {
-            let coordinate = CLLocationCoordinate2D(latitude: saved[0], longitude: saved[1])
-            holdingDestination = apply(coordinate, pairing: pairing, markRecent: false)
         }
+    }
+
+    func prepareForBackground(pairing: PairingStore) {
+        guard hasLocationIntent else { return }
+        saveRouteCheckpoint(force: true)
+        beginBackground()
+        startResend(pairing: pairing)
+        startHealth(pairing: pairing)
+    }
+
+    private static func storedPoint(_ coordinate: CLLocationCoordinate2D) -> PlaybackStore.Point {
+        PlaybackStore.Point(latitude: coordinate.latitude, longitude: coordinate.longitude)
+    }
+
+    private func saveRouteCheckpoint(force: Bool = false) {
+        guard routeRunning, routeTask != nil, let simulated else { return }
+        playbackStore.checkpoint(position: Self.storedPoint(simulated), nextWaypoint: nextWaypoint,
+                                 paused: routePaused, force: force)
     }
 
     private func cancelMovement() {
@@ -382,7 +438,9 @@ final class SpoofSession: ObservableObject {
     }
 
     @discardableResult
-    private func apply(_ coordinate: CLLocationCoordinate2D, pairing: PairingStore, markRecent: Bool) -> Bool {
+    private func apply(_ coordinate: CLLocationCoordinate2D, pairing: PairingStore, markRecent: Bool,
+                       reportError: Bool = true) -> Bool {
+        let wasInterrupted = status.isDropped || status == .reconnecting
         if status == .idle || status.isDropped {
             status = .connecting
         }
@@ -397,7 +455,10 @@ final class SpoofSession: ObservableObject {
         switch result {
         case .success:
             simulated = coordinate
-            UserDefaults.standard.set([coordinate.latitude, coordinate.longitude], forKey: "locus.holdCoordinate")
+            if !routeRunning {
+                playbackStore.setHold(Self.storedPoint(holdTarget ?? coordinate))
+            }
+            if holdTarget != nil { holdingDestination = true }
             status = .active
             lastError = nil
             beginBackground()
@@ -409,10 +470,10 @@ final class SpoofSession: ObservableObject {
             }
             return true
         case .failure(let error):
-            lastError = error.localizedDescription
-            if simulated != nil {
+            if reportError { lastError = error.localizedDescription }
+            if simulated != nil || holdTarget != nil || routeRunning {
                 status = .dropped(error.localizedDescription)
-                postDropNotification(error.localizedDescription)
+                if !wasInterrupted { postDropNotification(error.localizedDescription) }
             } else {
                 status = .idle
             }
@@ -436,12 +497,15 @@ final class SpoofSession: ObservableObject {
 
     private func startResend(pairing: PairingStore) {
         guard resendTimer == nil else { return }
-        resendTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self, self.resendTimer != nil, let sim = self.simulated else { return }
-                _ = self.apply(sim, pairing: pairing, markRecent: false)
+                guard let self, self.resendTimer != nil,
+                      let target = self.holdTarget ?? self.simulated else { return }
+                _ = self.apply(target, pairing: pairing, markRecent: false, reportError: false)
             }
         }
+        resendTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func stopResend() {
@@ -451,18 +515,22 @@ final class SpoofSession: ObservableObject {
 
     private func startHealth(pairing: PairingStore) {
         guard healthTimer == nil else { return }
-        healthTimer = Timer.scheduledTimer(withTimeInterval: 12, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 12, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self, self.healthTimer != nil, let sim = self.simulated else { return }
+                guard let self, self.healthTimer != nil,
+                      let sim = self.holdTarget ?? self.simulated else { return }
+                self.audioKeeper.start()
                 if case .dropped = self.status {
                     self.status = .reconnecting
-                    self.apply(sim, pairing: pairing, markRecent: false)
+                    self.apply(sim, pairing: pairing, markRecent: false, reportError: false)
                 } else if !LocationEngine.isSessionActive, self.isSpoofing {
                     self.status = .reconnecting
-                    self.apply(sim, pairing: pairing, markRecent: false)
+                    self.apply(sim, pairing: pairing, markRecent: false, reportError: false)
                 }
             }
         }
+        healthTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func stopHealth() {
@@ -493,6 +561,7 @@ final class SpoofSession: ObservableObject {
     }
 
     private func beginBackground() {
+        locationKeeper.beginBackgroundActivity()
         audioKeeper.start()
         guard !backgroundSessionStarted else { return }
         backgroundSessionStarted = true
@@ -502,6 +571,7 @@ final class SpoofSession: ObservableObject {
     }
 
     private func endBackground() {
+        locationKeeper.endBackgroundActivity()
         audioKeeper.stop()
         backgroundSessionStarted = false
         endBackgroundTask()

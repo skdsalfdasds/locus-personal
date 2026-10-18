@@ -44,6 +44,7 @@ final class PairingStore: ObservableObject {
     func refresh() {
         try? FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         hasPairingFile = FileManager.default.fileExists(atPath: pairingURL.path)
+        if hasPairingFile { try? configureFileAccess() }
     }
 
     func importPairing(from sourceURL: URL) throws {
@@ -96,9 +97,16 @@ final class PairingStore: ObservableObject {
             try FileManager.default.removeItem(at: pairingURL)
         }
         try data.write(to: pairingURL, options: .atomic)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: pairingURL.path)
+        try configureFileAccess()
         hasPairingFile = true
         lastError = nil
+    }
+
+    private func configureFileAccess() throws {
+        try FileManager.default.setAttributes([
+            .posixPermissions: 0o600,
+            .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication,
+        ], ofItemAtPath: pairingURL.path)
     }
 
     private func looksLikePairingPlist(_ data: Data) -> Bool {

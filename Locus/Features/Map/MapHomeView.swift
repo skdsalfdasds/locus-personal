@@ -40,7 +40,9 @@ struct MapHomeView: View {
             // shifts convert() upward by ~status-bar height.
             MapReader { proxy in
                 Map(position: $position) {
-                    UserAnnotation()
+                    if !session.routeRunning && !session.joystickActive {
+                        UserAnnotation()
+                    }
 
                     if let pin = session.pin {
                         Annotation("", coordinate: pin, anchor: .bottom) {
@@ -86,15 +88,6 @@ struct MapHomeView: View {
                                     }
                                 }
                             )
-                        }
-                    }
-                    if let sim = session.simulated {
-                        Annotation("Spoof", coordinate: sim) {
-                            ZStack {
-                                Circle().fill(LocusTheme.accent.opacity(0.25)).frame(width: 44, height: 44)
-                                Circle().fill(LocusTheme.accent).frame(width: 14, height: 14)
-                                    .overlay(Circle().stroke(.white, lineWidth: 2))
-                            }
                         }
                     }
                     if routeCoords.count > 1 {

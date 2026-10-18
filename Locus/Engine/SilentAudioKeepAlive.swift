@@ -27,6 +27,12 @@ final class SilentAudioKeepAlive {
             self.interrupted = false
             self.start()
         })
+        observers.append(NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            guard let self, self.wantsPlayback, !self.interrupted else { return }
+            self.start()
+        })
     }
 
     deinit {
@@ -65,7 +71,12 @@ final class SilentAudioKeepAlive {
 
     private static func writeSilentWAV() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("locus-silence.wav")
-        if FileManager.default.fileExists(atPath: url.path) { return url }
+        if FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.setAttributes([
+                .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication,
+            ], ofItemAtPath: url.path)
+            return url
+        }
 
         let sampleRate: Int = 8000
         let durationSamples = sampleRate / 10 // 0.1s
@@ -96,7 +107,7 @@ final class SilentAudioKeepAlive {
         appendUInt32(dataSize)
         data.append(Data(count: Int(dataSize))) // zeros = silence
 
-        try data.write(to: url, options: .atomic)
+        try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         return url
     }
 }
