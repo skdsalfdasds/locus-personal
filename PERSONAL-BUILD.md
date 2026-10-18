@@ -40,9 +40,12 @@ private repositories use the account's Actions allowance and may incur charges.
 
 ## Verification status
 
-This Windows environment has no Xcode/iOS SDK. Swift syntax, YAML/plist structure,
-and source diffs can be checked locally; full compilation and iPhone behavior remain
-unverified until the macOS workflow and physical-device tests run.
+The Windows laptop has no Xcode/iOS SDK. The hosted macOS build now completed
+successfully with Xcode 26.3, including the executable movement timing checks.
+The downloaded unsigned IPA passed archive and metadata inspection.
+Build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39109528693
+The IPA is in outputs/Locus-personal-unsigned.ipa and still needs local signing.
+No simulator or physical-iPhone behavior has been verified yet.
 
 The workflow includes executable checks for MPH units, ETA, and segment pacing.
 Device acceptance: address search and pin route previews; distance and ETA;
@@ -52,4 +55,5 @@ arrival hold; tunnel interruption/reconnection; Stop restoring actual GPS.
 Local checks completed: all 10 new/modified Swift files parse without syntax errors;
 project/workflow YAML and resource plists parse; the build shell script passes Bash
 syntax checking; git diff passes whitespace checks. These are not a Swift typecheck
-or a successful iOS build. The timing checks are prepared but have not been executed.
+or a physical-device test. See VERIFICATION.txt for the successful remote build and
+the checks that still require an iPhone.

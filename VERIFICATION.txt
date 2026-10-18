@@ -1,4 +1,14 @@
-Local validation (October 18, 2026)
+Build and local validation (October 18, 2026)
+
+PASS: full Release device build with Xcode 26.3 on a GitHub-hosted macOS runner.
+PASS: executable Swift movement timing checks on that runner.
+PASS: downloaded IPA ZIP integrity, Info.plist, bundle identifier/version, and Mach-O executable.
+Build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39109528693
+Built source commit: f7dd85e
+IPA: outputs/Locus-personal-unsigned.ipa
+Bundle identifier: com.locus.personal
+Version/build: 1.1.0 / 4
+SHA256: 5047d7068a308c233213cf008c08b5290d8773ca90bf298326a1e86bd4228437
 
 PASS: Swift syntax parser accepts all 10 modified/new Swift files.
 PASS: project.yml and .github/workflows/build-ios.yml parse as YAML.
@@ -7,8 +17,7 @@ PASS: resource plist files parse.
 PASS: build-unsigned-ios.sh passes bash -n.
 PASS: git diff --check.
 
-NOT RUN: Swift compiler/typecheck, executable timing checks, full iOS build,
-simulator UI inspection, physical-device movement, screen-lock/background playback,
+NOT RUN: simulator UI inspection, physical-device installation or movement, screen-lock/background playback,
 Life360 Circle-view verification, long-duration destination hold.
 
 The syntax parser reports a limitation on two pre-existing ternary expressions
