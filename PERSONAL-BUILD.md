@@ -34,11 +34,24 @@ for the build. The resulting IPA is unsigned and must be signed/sideloaded local
 5. Import your own RPPairing file and use LocalDevVPN, as described in SETUP.md.
 
 The workflow does not publish a release or upload Apple signing credentials.
-This derivative uses bundle identifier `com.locus.personal` and version 1.1.1.
+This derivative uses bundle identifier `com.locus.personal` and version 1.2.0.
 Public repositories with standard hosted runners have free Actions builds;
 private repositories use the account's Actions allowance and may incur charges.
 
 ## Verification status
+
+Version 1.2.0 (build 6) removes the extra simulated-location annotation and hides
+the MapKit location dot during route/joystick movement. A background location activity
+session, lock-accessible pairing/audio files, audio route recovery, and common-mode
+hold/retry timers improve operation while the screen is locked or another app is open.
+The route and last confirmed cursor are saved separately; reopening resumes saved
+progress without jumping ahead for time spent terminated. Arrival saves a persistent
+hold target, including retry intent if initial reconnection fails. Stop clears it.
+The full Release build, movement, tunnel, and saved-state checks passed:
+https://github.com/skdsalfdasds/locus-personal/actions/runs/39113203387
+Screen-lock, background duration, and Life360 behavior remain unverified on the phone.
+Force quitting terminates active maintenance. Reopening restores intent; this cannot
+guarantee a coordinate survives force quit, system suspension, restart, or power-off.
 
 Version 1.1.1 (build 5) adds explicit action colors for readable disabled buttons
 and a destination hint. VPN status now checks the configured developer endpoint

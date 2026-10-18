@@ -1,6 +1,19 @@
 Build and local validation (October 18, 2026)
 
-LATEST: version 1.1.1 / build 5, source 57a27c3.
+LATEST: version 1.2.0 / build 6, source 5548e0c.
+PASS: full Release iOS build; movement timing and developer tunnel checks.
+PASS: persisted route cursor and pause survive reopening.
+PASS: arrival retires route and persists final hold; Stop removes restoration intent.
+PASS: invalid saved coordinates and waypoint indexes are rejected.
+PASS: IPA archive integrity, version/build/bundle ID, and audio/location background modes.
+Build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39113203387
+IPA: outputs/Locus-1.2.0-unsigned.ipa (also outputs/Locus-personal-unsigned.ipa)
+SHA256: 6f62e9072685636ea246cf911ed71ca70591bb42c4be0efb42403bbcecfc30b1
+PENDING: physical-device marker visibility, locked-screen movement, background hold,
+VPN reconnection while locked, and Life360. Continuous force-quit/power-off operation
+is not supported; saved progress/hold restore on reopening.
+
+Previous version 1.1.1 / build 5, source 57a27c3:
 PASS: full Release iOS build and executable movement timing checks.
 PASS: TCP endpoint reachable, endpoint closed, and cancelled-probe checks on macOS.
 PASS: downloaded IPA ZIP integrity and bundle/version/build metadata.
