@@ -34,11 +34,19 @@ for the build. The resulting IPA is unsigned and must be signed/sideloaded local
 5. Import your own RPPairing file and use LocalDevVPN, as described in SETUP.md.
 
 The workflow does not publish a release or upload Apple signing credentials.
-This derivative uses bundle identifier `com.locus.personal` and version 1.1.0.
+This derivative uses bundle identifier `com.locus.personal` and version 1.1.1.
 Public repositories with standard hosted runners have free Actions builds;
 private repositories use the account's Actions allowance and may incur charges.
 
 ## Verification status
+
+Version 1.1.1 (build 5) adds explicit action colors for readable disabled buttons
+and a destination hint. VPN status now checks the configured developer endpoint
+instead of guessing from interface addresses; active location-session status takes
+precedence. A failed probe reports an unresponsive tunnel, not a disconnected VPN.
+The full Release build, movement checks, and executable TCP reachability/closed-port/
+cancellation checks passed: https://github.com/skdsalfdasds/locus-personal/actions/runs/39112327113
+The revised interface and LocalDevVPN behavior still need physical-device verification.
 
 The Windows laptop has no Xcode/iOS SDK. The hosted macOS build now completed
 successfully with Xcode 26.3, including the executable movement timing checks.

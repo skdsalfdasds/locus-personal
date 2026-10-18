@@ -1,5 +1,17 @@
 Build and local validation (October 18, 2026)
 
+LATEST: version 1.1.1 / build 5, source 57a27c3.
+PASS: full Release iOS build and executable movement timing checks.
+PASS: TCP endpoint reachable, endpoint closed, and cancelled-probe checks on macOS.
+PASS: downloaded IPA ZIP integrity and bundle/version/build metadata.
+Build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39112327113
+IPA: outputs/Locus-1.1.1-unsigned.ipa (also outputs/Locus-personal-unsigned.ipa)
+SHA256: f467deaca925c5c045ac15962a5685560d0fdc9396d4288bf00fbcbbd62f8a6a
+PENDING: physical-iPhone contrast and LocalDevVPN detection with this release.
+The native test harness emits Swift 6 capture warnings in the current Swift 5 build.
+
+Previous version 1.1.0 build evidence:
+
 PASS: full Release device build with Xcode 26.3 on a GitHub-hosted macOS runner.
 PASS: executable Swift movement timing checks on that runner.
 PASS: downloaded IPA ZIP integrity, Info.plist, bundle identifier/version, and Mach-O executable.
