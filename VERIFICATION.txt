@@ -1,6 +1,23 @@
 Build and local validation (October 18, 2026)
 
-LATEST: version 1.4.0 / build 11, source 969d4a8.
+LATEST: Waypoint version 1.5.0 / build 12, source dccb17b.
+PASS: full Release iPhone build and all existing native checks.
+PASS: local street/freeway/congestion estimates yield distinct speeds; ETA integrates remaining sections.
+PASS: braking anticipates known slower sections; Automatic transitions stay smooth with variation disabled.
+PASS: cached sections and unknown-section fallback survive stale/offline conditions.
+PASS: bounded lookahead and request spacing; failures back off; obvious ETA path-distance mismatches rejected.
+PASS: section selection follows route progress through crossings; tiny tails merge; invalid paths rejected.
+PASS: shortened route recovery preserves cached section boundaries and pace.
+PASS: Stop, manual route replacement, and Restore retire stale section metadata.
+PASS: IPA ZIP integrity, Waypoint display name, com.locus.personal bundle ID, version/build, and legacy URL callback.
+Build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39118553620
+IPA: outputs/Waypoint-1.5.0-unsigned.ipa (also outputs/Locus-personal-unsigned.ipa)
+SHA256: 70dcd2a94e2606f67509cecb56f0e75b10f60fd57496ea85bc5107293742e96d
+PENDING: physical-iPhone UI/upgrade, live Apple Maps section ETAs, and background playback.
+LIMITATION: endpoint ETA may use a different path; distance checks do not prove matching roads.
+LIMITATION: inferred section averages do not reproduce exact traffic flow, individual stops, or posted speed limits.
+
+Previous version 1.4.0 / build 11, source 969d4a8:
 PASS: full Release iPhone build and all existing native checks.
 PASS: continuous deterministic variation remains bounded; bends reduce target speed.
 PASS: baseline changes respect acceleration/braking limits; manual timing stays exact with variation off.

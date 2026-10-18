@@ -1,6 +1,6 @@
-# Personal Locus changes
+# Waypoint personal build
 
-This is a local MIT-licensed derivative of ChrisMack32/Locus. The original interface,
+Waypoint is a local MIT-licensed derivative of ChrisMack32/Locus. The original interface,
 address autocomplete, favorites, joystick, map modes, road routing, and GPX import remain.
 
 Added: 1–85 MPH control, route distance and estimated travel time, automatic route
@@ -35,11 +35,55 @@ for the build. The resulting IPA is unsigned and must be signed/sideloaded local
 5. Import your own RPPairing file and use LocalDevVPN, as described in SETUP.md.
 
 The workflow does not publish a release or upload Apple signing credentials.
-This derivative uses bundle identifier `com.locus.personal` and version 1.4.0.
+This derivative uses bundle identifier `com.locus.personal` and version 1.5.0.
 Public repositories with standard hosted runners have free Actions builds;
 private repositories use the account's Actions allowance and may incur charges.
 
 ## Verification status
+
+Version 1.5.0 (build 12) renames the visible app to Waypoint. Bundle identity,
+UserDefaults keys, URL callbacks, pairing document types, and existing pairing
+storage remain compatible with an in-place update using the same signing account.
+Upstream Locus and idevice MIT attribution remain in the app and source.
+
+Automatic now builds approximately 1 km (0.62 mile) sections using actual path
+distance. A final fragment under 250 m merges with the previous section. It
+requests a traffic-aware calculateETA for the first section during preview,
+then fetches/refreshes the current section and up to two ahead during playback.
+Next-section departure times use the estimated time until reaching that section.
+Usable section ETAs set distinct target speeds, including slower congestion
+estimates and faster uncongested stretches. The app does not identify freeway
+road class or read posted limits; local expected time determines the pace.
+
+Requests are serialized with at least 20 seconds between playback requests.
+Failures back off from 60 seconds to five minutes. Cached sections continue
+through outages, while unknown sections use the overall route average; the
+movement options explain which source is in use. Cached data may become stale.
+Section boundaries use distance remaining so recovery does not shift their
+positions or skip ahead at crossings. Stop and Restore retire the profile.
+
+The pacing target anticipates known slower sections with the existing gentle
+braking limit. Automatic transitions remain limited to 0.35 m/s² acceleration
+and 0.55 m/s² braking even with optional slight variation disabled. The ETA sums
+the remaining section durations rather than assuming the current local speed
+applies all the way to the destination. Transition and variation time are approximate.
+
+Apple does not expose per-road traffic speeds in this API. Independent endpoint
+ETA requests may select a different path. Estimates whose reported distance
+differs by more than 15% or 75 m (whichever is larger) are rejected, but similar
+distance does not guarantee the same road. This is a localized approximation,
+not an exact congestion feed or traffic-light/stop-and-go simulation.
+Apple Maps receives search and route/section endpoints; the app's Privacy copy
+now states this explicitly. Favorites and pairing remain stored locally.
+
+Full Release build and all native timing, speed, traffic-section, request spacing,
+backoff, path-distance validation, saved-state, confirmation, and tunnel checks passed:
+https://github.com/skdsalfdasds/locus-personal/actions/runs/39118553620
+Local IPA integrity, Waypoint display name, bundle/version/build metadata, and
+legacy URL scheme passed inspection. Physical-iPhone UI, live traffic requests,
+and background movement with this version remain unverified.
+Install outputs/Waypoint-1.5.0-unsigned.ipa over the existing app with Sideloadly
+and the same Apple ID. Keep the existing bundle identity; do not delete the app.
 
 Version 1.4.0 (build 11) defaults to Automatic. Road-route distance divided by
 MapKit calculateETA's traffic-aware expected travel time sets the average speed,
