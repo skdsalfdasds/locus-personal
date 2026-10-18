@@ -1,6 +1,17 @@
 Build and local validation (October 18, 2026)
 
-LATEST: version 1.3.0 / build 8, source 9c10a19.
+LATEST: version 1.3.2 / build 10, source f92ed0c (includes 1.3.1 source d1bd81e).
+PASS: full Release iPhone build and all existing native safety/persistence checks.
+PASS: remaining route line starts at the current playback position and removes traveled segments.
+PASS: repeated coordinates/crossings retain correct waypoint order; completed paths draw no stale line.
+PASS: downloaded IPA archive integrity and bundle/version/build metadata.
+SOURCE CHECKED: standard UserAnnotation is unconditional; startup travel mode is Drive.
+Build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39115453966
+IPA: outputs/Locus-1.3.2-unsigned.ipa (also outputs/Locus-personal-unsigned.ipa)
+SHA256: c1c8b8b3609d59640bc914fea3f1f9eba3cc1b5cdb5d769e925c2d1078427799
+PENDING: physical-phone blue-dot visibility, route animation/arrival, and mode selection.
+
+Previous version 1.3.0 / build 8, source 9c10a19:
 PASS: full Release iPhone build; existing timing, tunnel, and persistence checks.
 PASS: no hold confirmation on tap, early release, cancellation, or accumulated holds.
 PASS: a continuous three-second hold issues a single short-lived confirmation permit.

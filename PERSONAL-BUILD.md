@@ -46,6 +46,9 @@ position through the remaining waypoints. It uses playback's waypoint cursor so
 crossings and loops cannot skip ahead. Pauses and failed sends retain the current
 line; arrival or Stop removes it without redisplaying the full original preview.
 The full source path remains available for GPX export.
+Full iPhone Release build and all native checks, including route trimming and loops,
+passed: https://github.com/skdsalfdasds/locus-personal/actions/runs/39115453966
+Physical-device appearance remains unverified until the signed update is installed.
 
 Version 1.3.1 (build 9) restores the standard MapKit blue location indicator during
 route and joystick movement and initializes travel mode to Drive. Saved custom MPH
