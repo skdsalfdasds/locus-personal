@@ -41,6 +41,15 @@ private repositories use the account's Actions allowance and may incur charges.
 
 ## Verification status
 
+Version 1.2.1 (build 7) adds seconds to ETA. Stop now cancels movement and persists
+the last confirmed position as a hold; it does not call the simulation clear API.
+The separate Restore real location action removes saved intent and requests a clear,
+reconnecting without setting coordinates if necessary. A failed clear does not restart
+hold maintenance automatically and reports retry/restart guidance.
+Full Release build, ETA checks, and mid-route stop/hold/restore persistence checks passed:
+https://github.com/skdsalfdasds/locus-personal/actions/runs/39113552370
+Device validation of Stop and Restore real location remains pending.
+
 Version 1.2.0 (build 6) removes the extra simulated-location annotation and hides
 the MapKit location dot during route/joystick movement. A background location activity
 session, lock-accessible pairing/audio files, audio route recovery, and common-mode

@@ -1,6 +1,18 @@
 Build and local validation (October 18, 2026)
 
-LATEST: version 1.2.0 / build 6, source 5548e0c.
+LATEST: version 1.2.1 / build 7, source 054b669.
+PASS: full Release iOS build, developer tunnel checks, and movement timing checks.
+PASS: seconds formatting at sub-minute, minute/hour boundaries, and invalid input.
+PASS: stopping mid-route retains confirmed position, not destination; restores from disk.
+PASS: real-location restoration removes saved route/hold intent.
+PASS: downloaded IPA integrity and bundle/version/build metadata.
+Build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39113552370
+IPA: outputs/Locus-1.2.1-unsigned.ipa (also outputs/Locus-personal-unsigned.ipa)
+SHA256: b550aa58fa352fe7fbbb4e8e8e18724e1ba57c84c3a9ceb49e4c3e11d59c3d1e
+PENDING: physical-device Stop, Restore real location (including reconnection), ETA UI,
+screen-lock/background duration, and Life360. No force-quit persistence guarantee.
+
+Previous version 1.2.0 / build 6, source 5548e0c:
 PASS: full Release iOS build; movement timing and developer tunnel checks.
 PASS: persisted route cursor and pause survive reopening.
 PASS: arrival retires route and persists final hold; Stop removes restoration intent.
