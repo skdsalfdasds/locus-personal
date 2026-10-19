@@ -43,15 +43,15 @@ Statuses below distinguish implemented code from verification on a physical devi
 | Privacy/identifier hiding | Implemented |
 | Desktop URI installation scheme | Outstanding |
 | Remote and Lockdown pairing creation | Implemented; native remote creation not executed on protected phone |
-| Pairing import/export | Export implemented; import outstanding |
-| Pairing live validation | Outstanding |
-| Known-app pairing destinations | Core filenames implemented; full LiveContainer/subfolder handling outstanding |
+| Pairing import/export | XML/binary import and export implemented; key consistency, deduplication and device association tested without hardware |
+| Pairing live validation | Native remote/Lockdown authentication implemented and compiled; failed authentication cannot bind a record; not run on protected phone |
+| Known-app pairing destinations | Full upstream destination list plus Waypoint and LiveContainer subfolder path implemented; mocked transfer contract tested |
 | mDNS discovery, Apple TV PIN, iOS 27 host PIN | Outstanding |
 | Wireless debugging control | Implemented behind protection guard; not invoked on protected phone |
-| Windows one-click desktop installer | Build prepared; final packaged smoke test required |
-| macOS and Linux installers | Build configuration present; target-specific builds/testing outstanding |
+| Windows one-click desktop installer | Packaged preview built and launched; frozen runtime, pairing import and write protection verified |
+| macOS and Linux installers | Platform-native CI builds running for Linux x64, Intel Mac and Apple Silicon Mac; results not yet verified |
 | License/source distribution completeness | Core notices prepared; full bundled dependency/source inventory outstanding before public release |
-| Rich speed location interface investigation | Isolated XCTest probe compiles successfully in macOS CI; not installed or run on the protected phone |
+| Rich speed location interface investigation | Isolated XCTest probe compiles; first simulator run received no callbacks and is inconclusive; authorization diagnostics running; never run on protected phone |
 | Life360 recognizes simulated driving activity | Unverified. No supported Core Motion automotive setter identified; coordinate speed alone does not prove drive recognition |
 
 ## Protected-phone constraint
@@ -66,3 +66,8 @@ location setting or installed Waypoint app may be altered.
 - Waypoint 1.5.2 build and existing movement tests: https://github.com/skdsalfdasds/locus-personal/actions/runs/39324349511
 - Desktop source tests are local in tests/; do not mistake mocked orchestration
   for successful physical installation or Life360 drive recognition.
+- Desktop platform build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39341388486
+- Instrumented simulator experiment: https://github.com/skdsalfdasds/locus-personal/actions/runs/39341952899
+- 41 backend tests and desktop navigation checks pass locally. Native validation
+  compiles in release mode. Frozen Windows backend import and protection checks
+  use synthetic records and never open a phone service.

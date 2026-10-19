@@ -15,7 +15,6 @@ Main components:
 | Electron | MIT and bundled Chromium/Node notices | https://github.com/electron/electron |
 | React | MIT | https://github.com/facebook/react |
 | Lucide icons | ISC | https://github.com/lucide-icons/lucide |
-| Inter | OFL-1.1 | https://github.com/rsms/inter |
 | LIEF | Apache-2.0 | https://github.com/lief-project/LIEF |
 | Pillow | MIT-CMU | https://github.com/python-pillow/Pillow |
 | cryptography | Apache-2.0 OR BSD-3-Clause | https://github.com/pyca/cryptography |
@@ -25,6 +24,10 @@ Main components:
 LocalDevVPN remains an independently installed App Store application. Its source
 is at https://github.com/jkcoxson/LocalDevVPN. This project uses its documented URL
 scheme; no LocalDevVPN binary is copied into Waypoint Desktop.
+
+Pairing destination conventions are based on the MIT-licensed idevice_pair
+project at https://github.com/jkcoxson/idevice_pair. No pairing records are copied
+from that project or distributed with this application.
 
 Sideloadly is a feature reference only. No proprietary Sideloadly code, anisette
 plugin, binary, or branding is redistributed.
