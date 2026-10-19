@@ -174,7 +174,7 @@ export default function App(){
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="wordmark">Waypoint<span>Desktop</span></div>
+      <div className="wordmark">Waypoint</div>
       <nav aria-label="Workspace">{navigation.map(({id,label})=><button key={id} className={page===id?'selected':''} aria-current={page===id?'page':undefined} onClick={()=>{setPage(id);setSearch('');}}><span>{label}</span>{id==='activity'&&running.length>0&&<small>{running.length}</small>}</button>)}</nav>
       <div className="sidebar-bottom"><button className={page==='settings'?'selected':''} onClick={()=>setPage('settings')}>Settings</button><button onClick={()=>window.waypoint?.openExternal('https://github.com/jkcoxson/idevice_pair#usage')}>Help & documentation</button><p>Version {status?.version||'0.1.0'}<span>Development build</span></p></div>
     </aside>
