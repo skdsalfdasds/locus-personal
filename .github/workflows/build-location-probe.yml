@@ -1,0 +1,34 @@
+name: Build location interface probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+      - name: Install XcodeGen
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Build isolated observer and XCTest runner
+        working-directory: experiments/LocationProbe
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          mkdir -p outputs
+          xcodebuild build-for-testing -project WaypointLocationProbe.xcodeproj -scheme WaypointLocationProbe -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' DEVELOPMENT_TEAM='' 2>&1 | tee outputs/build.log
+          for app in build/Build/Products/Debug-iphoneos/*.app; do
+            staging="$(mktemp -d)"
+            mkdir -p "$staging/Payload"
+            ditto "$app" "$staging/Payload/$(basename "$app")"
+            ditto -c -k --keepParent "$staging/Payload" "outputs/$(basename "$app" .app)-unsigned.ipa"
+          done
+          shasum -a 256 outputs/*.ipa > outputs/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Waypoint-location-interface-probe
+          path: experiments/LocationProbe/outputs/
