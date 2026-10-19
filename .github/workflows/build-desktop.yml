@@ -1,0 +1,110 @@
+name: Build Waypoint Desktop
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ios-package:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+      - name: Install XcodeGen
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Build unsigned Waypoint for desktop setup
+        run: |
+          bash scripts/build-unsigned-ios.sh
+          mkdir -p outputs/desktop-package
+          cp outputs/Locus-personal-unsigned.ipa outputs/desktop-package/Waypoint.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Desktop-bundled-Waypoint
+          path: outputs/desktop-package/Waypoint.ipa
+          retention-days: 3
+  desktop:
+    needs: ios-package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2025
+            platform: win
+            arch: x64
+          - os: ubuntu-24.04
+            platform: linux
+            arch: x64
+          - os: macos-15
+            platform: mac
+            arch: arm64
+          - os: macos-15-intel
+            platform: mac
+            arch: x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: desktop
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/native -> target
+      - name: Install Linux build and runtime dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake clang pkg-config libssl-dev xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libasound2t64 libgtk-3-0t64 usbmuxd
+          sudo usbmuxd -U root
+      - name: Install source dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          python -m pip install -r backend/requirements.txt
+      - name: Test package editing, pairing import, and protected-device behavior
+        run: python -m unittest discover -s tests -v
+      - name: Compile native signing and pairing engine
+        run: cargo build --release --locked --manifest-path native/Cargo.toml --jobs 4
+      - name: Build interface
+        run: npm run build
+      - name: Test desktop interface
+        if: runner.os != 'Linux'
+        run: npm run test:desktop
+      - name: Test desktop interface on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:desktop
+      - uses: actions/download-artifact@v4
+        with:
+          name: Desktop-bundled-Waypoint
+          path: desktop/runtime/apps
+      - name: Bundle native runtime
+        run: |
+          python scripts/make-icons.py
+          python scripts/build-runtime.py
+          python scripts/verify-runtime.py
+      - name: Package installer
+        run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+      - name: Save target-specific installers and verification evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Waypoint-Desktop-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            desktop/release/*.exe
+            desktop/release/*.dmg
+            desktop/release/*.AppImage
+            desktop/release/*.deb
+            desktop/outputs/desktop-dark.png
+          retention-days: 3
