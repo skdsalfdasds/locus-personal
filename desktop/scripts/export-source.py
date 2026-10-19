@@ -6,20 +6,26 @@ import os
 import re
 import shutil
 
-ROOTS = ('backend', 'src', 'electron', 'scripts', 'tests', 'assets/icons', 'native/src')
+ROOTS = {'backend':{'.py','.txt'}, 'src':{'.tsx','.ts','.css'}, 'electron':{'.cjs'},
+         'scripts':{'.py','.cjs','.mjs'}, 'tests':{'.py','.cjs'}, 'assets/icons':{'.png','.ico','.icns'},
+         'native/src':{'.rs'}}
 FILES = ('package.json', 'package-lock.json', 'tsconfig.json', 'vite.config.ts', 'index.html',
          '.gitignore', 'LICENSE', 'README.md', 'REQUIREMENTS.md', 'THIRD-PARTY-NOTICES.md',
          'native/Cargo.toml', 'native/Cargo.lock')
 FORBIDDEN = {'.tools', '.venv', '.data', 'outputs', 'runtime', 'node_modules', 'target', '__pycache__'}
 BINARY = {'.png', '.ico', '.icns'}
-SECRET = re.compile(r'gh[pousr]_[A-Za-z0-9]{20,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----')
+SECRET = re.compile(r'gh[pousr]_[A-Za-z0-9]{20,}|-----BEGIN (?:RSA |EC |OPENSSH |ENCRYPTED )?PRIVATE KEY-----')
 
 
 def selection(source, identifiers=()):
     paths = []
-    for folder in ROOTS:
-        paths.extend(p for p in (source/folder).rglob('*') if p.is_file()
-                     and '__pycache__' not in p.parts and p.suffix not in {'.pyc', '.log'})
+    for folder, extensions in ROOTS.items():
+        for path in (source/folder).rglob('*'):
+            if not path.is_file() or '__pycache__' in path.parts or path.suffix in {'.pyc','.log'}:
+                continue
+            if path.suffix not in extensions:
+                raise ValueError('Unexpected file type in source: '+str(path.relative_to(source)))
+            paths.append(path)
     paths.extend(source/name for name in FILES)
     for path in paths:
         relative = path.relative_to(source)

@@ -60,4 +60,3 @@ class ProtectionTests(unittest.IsolatedAsyncioTestCase):
         for missing in (None, '', '../phone'):
             with self.subTest(device=missing), self.assertRaises(ValueError):
                 await self.backend.dispatch('install.start', {'deviceId':missing})
-

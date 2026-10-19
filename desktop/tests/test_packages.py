@@ -91,4 +91,3 @@ class PackageTests(unittest.TestCase):
                 package.writestr('Payload/Demo.app/Demo', b'conflicting-content')
         with self.assertRaisesRegex(ValueError, 'duplicate'):
             inspect_ipa(self.source)
-

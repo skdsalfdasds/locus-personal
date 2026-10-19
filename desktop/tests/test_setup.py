@@ -94,4 +94,3 @@ class SetupTests(unittest.IsolatedAsyncioTestCase):
         with patch('backend.setup.check',return_value=self.state):await run(self.backend,self.job,self.params)
         self.assertEqual(self.sequence,[])
         self.assertIn('will not restart',self.job['stage'])
-

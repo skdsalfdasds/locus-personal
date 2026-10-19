@@ -11,4 +11,3 @@ draw.polygon([(347,464),(696,319),(535,681),(520,506)],fill='#292f25')
 image.save(directory/'waypoint.png')
 image.save(directory/'waypoint.ico',sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])
 image.save(directory/'waypoint.icns')
-
