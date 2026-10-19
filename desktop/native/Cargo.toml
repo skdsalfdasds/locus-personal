@@ -1,0 +1,22 @@
+[package]
+name = "waypoint-engine"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+apparition-core = { git = "https://github.com/illixion/Apparition.git", rev = "0f038187f6a3b015fe1706324441f6a7453fecbd", features = ["desktop"] }
+idevice = { git = "https://github.com/jkcoxson/idevice.git", rev = "3854a5df4a5a6dee71ffce4d8befc2ea356a8065", default-features = false, features = ["ring", "usbmuxd", "remote_pairing", "installation_proxy", "house_arrest", "afc", "pair", "core_device_proxy", "rsd", "tcp", "tunnel_tcp_stack"] }
+serde_json = "1"
+tokio = { version = "1.49", features = ["rt-multi-thread", "macros", "sync", "time"] }
+plist = "1"
+
+[patch.crates-io]
+idevice = { git = "https://github.com/jkcoxson/idevice.git", rev = "3854a5df4a5a6dee71ffce4d8befc2ea356a8065" }
+
+[profile.release]
+lto = "thin"
+strip = true
+
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+apparition-core = { git = "https://github.com/illixion/Apparition.git", rev = "0f038187f6a3b015fe1706324441f6a7453fecbd", features = ["desktop", "anisette"] }

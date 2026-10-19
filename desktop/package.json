@@ -1,0 +1,81 @@
+{
+  "name": "waypoint-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "One workspace for iOS pairing, signing, installation, and app refresh",
+  "author": "Waypoint contributors",
+  "license": "GPL-3.0-or-later",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "desktop": "electron .",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "test:backend": "python -m unittest discover -s tests -v",
+    "test:desktop": "node --test tests/desktop.spec.cjs",
+    "build:runtime": "python scripts/build-runtime.py",
+    "package:win": "npm run build && electron-builder --win nsis --x64",
+    "package:mac": "npm run build && electron-builder --mac dmg",
+    "package:linux": "npm run build && electron-builder --linux AppImage deb --x64"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
+  },
+  "build": {
+    "appId": "app.waypoint.desktop",
+    "productName": "Waypoint Desktop",
+    "directories": {
+      "output": "release"
+    },
+    "icon": "assets/icons/waypoint",
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json",
+      "LICENSE",
+      "THIRD-PARTY-NOTICES.md"
+    ],
+    "extraResources": [
+      {
+        "from": "runtime",
+        "to": "runtime",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": "dmg"
+    },
+    "linux": {
+      "category": "Development",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true
+    }
+  }
+}
