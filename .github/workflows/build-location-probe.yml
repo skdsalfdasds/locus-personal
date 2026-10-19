@@ -32,3 +32,33 @@ jobs:
         with:
           name: Waypoint-location-interface-probe
           path: experiments/LocationProbe/outputs/
+  simulator:
+    name: Observe rich location delivery in isolated simulator
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+      - name: Install XcodeGen
+        run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Select an available iPhone simulator
+        run: |
+          set -euo pipefail
+          simulator="$(xcrun simctl list devices available --json | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next(v["udid"] for values in d["devices"].values() for v in values if v["name"].startswith("iPhone")))')"
+          echo "WAYPOINT_SIMULATOR_ID=$simulator" >> "$GITHUB_ENV"
+          xcrun simctl boot "$simulator" || true
+          xcrun simctl bootstatus "$simulator" -b
+      - name: Run independent observer test
+        working-directory: experiments/LocationProbe
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          mkdir -p outputs
+          xcodebuild test -project WaypointLocationProbe.xcodeproj -scheme WaypointLocationProbe -configuration Debug -destination "platform=iOS Simulator,id=$WAYPOINT_SIMULATOR_ID" -derivedDataPath build-simulator -resultBundlePath outputs/LocationProbe.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' DEVELOPMENT_TEAM='' 2>&1 | tee outputs/simulator-run.log
+      - name: Save simulator evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Waypoint-location-simulator-evidence
+          path: experiments/LocationProbe/outputs/

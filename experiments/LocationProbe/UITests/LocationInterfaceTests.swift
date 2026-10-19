@@ -39,6 +39,18 @@ final class LocationInterfaceTests: XCTestCase {
                 return app.staticTexts["observed-speed"].label
             }
             print("WAYPOINT_LOCATION_PROBE phase=\(name) requestedSpeed=\(speed) observed=\(observation)")
+            if name == "cruise" {
+                let value = observation.components(separatedBy: "speed-ms: ").last?
+                    .components(separatedBy: " ").first.flatMap(Double.init)
+                print("WAYPOINT_SPEED_DELIVERY requested=\(speed) observed=\(value.map(String.init(describing:)) ?? "unavailable")")
+                // A green test now means the observer actually received speed,
+                // not just that the XCTest setter accepted an input object.
+                XCTAssertNotNil(value, "The independent observer did not report speed")
+                if let value {
+                    XCTAssertEqual(value, speed, accuracy: 0.2,
+                                   "The location interface did not preserve requested speed")
+                }
+            }
             let attachment = XCTAttachment(string: "phase=\(name) requestedSpeed=\(speed) observed=\(observation)")
             attachment.name = "Location fields - \(name)"
             attachment.lifetime = .keepAlways
