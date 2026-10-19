@@ -39,6 +39,8 @@ final class LocationInterfaceTests: XCTestCase {
                 return app.staticTexts["observed-speed"].label
             }
             print("WAYPOINT_LOCATION_PROBE phase=\(name) requestedSpeed=\(speed) observed=\(observation)")
+            print("WAYPOINT_PROBE_AUTH \(app.staticTexts["observed-authorization"].label)")
+            print("WAYPOINT_PROBE_LOCATION \(app.staticTexts["observed-location"].label)")
             if name == "cruise" {
                 let value = observation.components(separatedBy: "speed-ms: ").last?
                     .components(separatedBy: " ").first.flatMap(Double.init)

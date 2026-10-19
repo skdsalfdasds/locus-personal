@@ -56,6 +56,18 @@ jobs:
           xcodegen generate
           mkdir -p outputs
           xcodebuild test -project WaypointLocationProbe.xcodeproj -scheme WaypointLocationProbe -configuration Debug -destination "platform=iOS Simulator,id=$WAYPOINT_SIMULATOR_ID" -derivedDataPath build-simulator -resultBundlePath outputs/LocationProbe.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' DEVELOPMENT_TEAM='' 2>&1 | tee outputs/simulator-run.log
+      - name: Export simulator observations and test attachments
+        if: always()
+        working-directory: experiments/LocationProbe
+        run: |
+          mkdir -p outputs
+          data="$(xcrun simctl get_app_container "$WAYPOINT_SIMULATOR_ID" app.waypoint.locationprobe data 2>/dev/null || true)"
+          if [ -n "$data" ] && [ -f "$data/Documents/location-observations.jsonl" ]; then
+            cp "$data/Documents/location-observations.jsonl" outputs/simulator-observations.jsonl
+          fi
+          if [ -d outputs/LocationProbe.xcresult ]; then
+            xcrun xcresulttool export attachments --path outputs/LocationProbe.xcresult --output-path outputs/attachments || true
+          fi
       - name: Save simulator evidence
         uses: actions/upload-artifact@v4
         if: always()

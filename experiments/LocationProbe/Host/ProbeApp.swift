@@ -10,6 +10,7 @@ struct ProbeApp: App {
             NavigationStack {
                 Form {
                     Section("Location delivered by iOS") {
+                        Text(observer.authorizationSummary).accessibilityIdentifier("observed-authorization")
                         Text(observer.locationSummary).accessibilityIdentifier("observed-location")
                         Text(observer.speedSummary).accessibilityIdentifier("observed-speed")
                         Text(observer.sourceSummary)
@@ -34,6 +35,7 @@ final class LocationObserver: NSObject, ObservableObject, CLLocationManagerDeleg
     @Published var speedSummary = "speed-ms: unavailable"
     @Published var sourceSummary = "No source information"
     @Published var motionSummary = "Not observing"
+    @Published var authorizationSummary = "Authorization: not requested"
     private let location = CLLocationManager()
     private let motion = CMMotionActivityManager()
     private var started = false
@@ -48,6 +50,7 @@ final class LocationObserver: NSObject, ObservableObject, CLLocationManagerDeleg
     func start() {
         guard !started else { return }
         started = true
+        append(["kind": "started", "timestamp": Date().timeIntervalSince1970])
         location.requestWhenInUseAuthorization()
         location.startUpdatingLocation()
         if CMMotionActivityManager.isActivityAvailable() {
@@ -64,6 +67,17 @@ final class LocationObserver: NSObject, ObservableObject, CLLocationManagerDeleg
             }
         } else {
             motionSummary = "Motion activity unavailable on this device"
+        }
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        authorizationSummary = "Authorization: \(status.rawValue)"
+        append(["kind": "authorization", "status": status.rawValue,
+                "timestamp": Date().timeIntervalSince1970])
+        if started && (status == .authorizedWhenInUse || status == .authorizedAlways) {
+            manager.startUpdatingLocation()
+            manager.requestLocation()
         }
     }
 
@@ -84,6 +98,8 @@ final class LocationObserver: NSObject, ObservableObject, CLLocationManagerDeleg
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         locationSummary = error.localizedDescription
+        append(["kind": "locationError", "domain": (error as NSError).domain,
+                "code": (error as NSError).code, "timestamp": Date().timeIntervalSince1970])
     }
 
     private func append(_ record: [String: Any]) {
