@@ -33,6 +33,11 @@ jobs:
           set -euo pipefail
           swiftc Locus/Engine/MovementTiming.swift Locus/Engine/SpeedVariation.swift Tests/SpeedVariationChecks.swift -o "$RUNNER_TEMP/speed-checks" 2>&1 | tee outputs/speed-checks.log
           "$RUNNER_TEMP/speed-checks" 2>&1 | tee -a outputs/speed-checks.log
+      - name: Check movement keep-alive cadence
+        run: |
+          set -euo pipefail
+          swiftc Locus/Engine/LocationKeepAlive.swift Tests/LocationKeepAliveChecks.swift -o "$RUNNER_TEMP/keep-alive-checks" 2>&1 | tee outputs/keep-alive-checks.log
+          "$RUNNER_TEMP/keep-alive-checks" 2>&1 | tee -a outputs/keep-alive-checks.log
       - name: Check restore hold confirmation and connection failure behavior
         run: |
           set -euo pipefail
@@ -83,5 +88,6 @@ jobs:
             outputs/automatic-checks.log
             outputs/speed-checks.log
             outputs/pacing-checks.log
+            outputs/keep-alive-checks.log
           retention-days: 7
           if-no-files-found: error

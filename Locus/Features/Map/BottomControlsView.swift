@@ -154,6 +154,20 @@ private struct MovementOptionsSheet: View {
                             .textSelection(.enabled)
                     }
                 }
+                Section("Speed diagnostics") {
+                    if let location = session.observedLocation {
+                        LabeledContent("iOS-reported speed", value: location.speed.isFinite && location.speed >= 0
+                            ? String(format: "%.1f mph", location.speed / 0.44704) : "Unavailable")
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            LabeledContent("Location sample age", value: String(format: "%.0f sec",
+                                max(0, context.date.timeIntervalSince(location.timestamp))))
+                        }
+                    } else {
+                        Text("Waiting for an iOS location reading…")
+                    }
+                    Text("This reads Core Location’s speed separately from your route target. It is not a Life360 measurement. Waypoint does not override motion activity or step counts, and cannot guarantee drive detection.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
                 if case .dropped(let reason) = session.status {
                     Section("Connection") {
                         Text(reason).font(.footnote)

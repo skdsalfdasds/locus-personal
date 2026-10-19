@@ -4,6 +4,7 @@ import Foundation
 final class BackgroundKeepAlive: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private(set) var lastKnownCoordinate: CLLocationCoordinate2D?
+    var onLocation: ((CLLocation) -> Void)?
     private var backgroundActivity: CLBackgroundActivitySession?
     private var updatesStarted = false
 
@@ -55,5 +56,6 @@ final class BackgroundKeepAlive: NSObject, CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         lastKnownCoordinate = locations.last?.coordinate
+        if let location = locations.last { onLocation?(location) }
     }
 }

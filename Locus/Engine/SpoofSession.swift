@@ -75,6 +75,7 @@ final class SpoofSession: ObservableObject {
     @Published var status: SpoofStatus = .idle
     @Published var pin: CLLocationCoordinate2D?
     @Published var simulated: CLLocationCoordinate2D?
+    @Published private(set) var observedLocation: CLLocation?
     @Published var travelMode: TravelMode = .automatic {
         didSet {
             guard travelMode != oldValue else { return }
@@ -140,6 +141,7 @@ final class SpoofSession: ObservableObject {
     private var joystickVariation = SpeedVariation()
     private var joystickElapsed: TimeInterval = 0
     private var restorePending = false
+    private var locationKeepAlive = LocationKeepAlive()
 
     private let favoritesKey = "locus.favorites"
     private let recentsKey = "locus.recents"
@@ -149,6 +151,9 @@ final class SpoofSession: ObservableObject {
         recents = SavedPlace.load(key: recentsKey)
         let storedSpeed = UserDefaults.standard.double(forKey: "locus.speedMPH")
         if storedSpeed.isFinite, storedSpeed >= 1, storedSpeed <= 85 { speedMPH = storedSpeed }
+        locationKeeper.onLocation = { [weak self] location in
+            Task { @MainActor [weak self] in self?.observedLocation = location }
+        }
     }
 
     var isSpoofing: Bool {
@@ -657,6 +662,7 @@ final class SpoofSession: ObservableObject {
         isBusy = false
         switch result {
         case .success:
+            locationKeepAlive.confirmed(at: ProcessInfo.processInfo.systemUptime)
             simulated = coordinate
             if routeRunning {
                 remainingRouteCoordinates = RouteLine.remaining(activeRouteCoordinates, from: coordinate,
@@ -714,6 +720,7 @@ final class SpoofSession: ObservableObject {
         let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self, self.resendTimer != nil,
+                      self.locationKeepAlive.needsResend(at: ProcessInfo.processInfo.systemUptime),
                       let target = self.holdTarget ?? self.simulated else { return }
                 _ = self.apply(target, pairing: pairing, markRecent: false, reportError: false)
             }
