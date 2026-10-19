@@ -39,6 +39,28 @@ final class PairingStore: ObservableObject {
 
     init() {
         refresh()
+        importStagedDesktopPairingIfNeeded()
+    }
+
+    /// Desktop setup writes into Documents through normal iOS file sharing. A
+    /// staged file must never replace a saved pairing or an active app session.
+    private func importStagedDesktopPairingIfNeeded() {
+        let checkedKey = "waypoint.desktopSetupPairingHandled"
+        guard !UserDefaults.standard.bool(forKey: checkedKey) else { return }
+        guard !hasPairingFile else {
+            UserDefaults.standard.set(true, forKey: checkedKey)
+            return
+        }
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let staged = documents.appendingPathComponent("waypoint-setup-pairing.plist")
+        guard FileManager.default.fileExists(atPath: staged.path) else { return }
+        do {
+            try installPairingData(Data(contentsOf: staged))
+            UserDefaults.standard.set(true, forKey: checkedKey)
+            try? FileManager.default.removeItem(at: staged)
+        } catch {
+            lastError = "Could not import the desktop setup pairing: \(error.localizedDescription)"
+        }
     }
 
     func refresh() {
