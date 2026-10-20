@@ -59,7 +59,7 @@ enum RichLocationRelayError: LocalizedError {
         switch self {
         case .invalidSample: return "The location sample has invalid or expired fields."
         case .invalidToken: return "The relay requires its session credential."
-        case .unavailable: return "The location relay is unavailable. The current override was not cleared."
+        case .unavailable: return "The location relay is unavailable. No restore command was sent."
         case .invalidReply: return "The location relay returned an invalid response."
         case .rejected(let reason): return "The location relay rejected the sample: \(reason)"
         }
