@@ -12,6 +12,8 @@ final class LocationInterfaceTests: XCTestCase {
 
     func testRichLocationDelivery() throws {
         let app = XCUIApplication()
+        let relayToken = (0..<32).map { _ in String(format: "%02x", UInt8.random(in: .min ... .max)) }.joined()
+        app.launchEnvironment["WAYPOINT_PROBE_RELAY_TOKEN"] = relayToken
         app.launch()
         addUIInterruptionMonitor(withDescription: "Probe observation permissions") { alert in
             for label in ["Allow While Using App", "Allow Once", "OK"] {
@@ -75,6 +77,45 @@ final class LocationInterfaceTests: XCTestCase {
             attachment.lifetime = .keepAlways
             add(attachment)
         }
+        try verifyRelayDelivery(in: app, token: relayToken)
         // No command to restore real location: stopping and clearing are distinct.
+    }
+
+    private func verifyRelayDelivery(in app: XCUIApplication, token: String) throws {
+        let server = try LocationRelayServer(token: token)
+        server.start()
+        defer { server.stop() }
+        let ready = expectation(for: NSPredicate { _, _ in server.isReady }, evaluatedWith: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed, "Loopback relay did not start")
+        guard server.isReady else { return }
+        app.buttons["relay-cruise"].tap()
+        XCTAssertTrue(waitForCoordinate("37.337100", in: app), "The app-to-runner relay did not deliver a moving coordinate")
+        let moving = app.staticTexts["observed-speed"].label
+        print("WAYPOINT_RELAY_CRUISE \(moving) \(app.staticTexts["observed-count"].label)")
+        XCTAssertTrue(moving.hasPrefix("speed-ms: 30.000"), "Relay discarded the requested speed")
+        XCTAssertTrue(moving.contains("accuracy: 0.100"), "Relay discarded speed accuracy")
+        XCTAssertTrue(moving.contains("course: 90.00"), "Relay discarded course")
+
+        app.buttons["relay-unauthorized"].tap()
+        let rejected = expectation(for: NSPredicate(format: "label CONTAINS %@", "Session authorization failed"),
+                                   evaluatedWith: app.staticTexts["relay-status"])
+        XCTAssertEqual(XCTWaiter.wait(for: [rejected], timeout: 10), .completed)
+        XCTAssertTrue(app.staticTexts["observed-location"].label.hasPrefix("37.337100"),
+                      "An unauthorized client changed the override")
+        print("WAYPOINT_RELAY_UNAUTHORIZED rejected=true")
+
+        app.buttons["relay-stationary"].tap()
+        XCTAssertTrue(waitForCoordinate("37.338100", in: app), "Relay stop did not preserve the requested position")
+        let stationary = app.staticTexts["observed-speed"].label
+        print("WAYPOINT_RELAY_STATIONARY \(stationary)")
+        XCTAssertTrue(stationary.hasPrefix("speed-ms: 0.000"), "Stationary relay sample kept a nonzero speed")
+        server.stop()
+        app.buttons["relay-cruise"].tap()
+        let disconnected = expectation(for: NSPredicate(format: "label CONTAINS %@", "relay is unavailable"),
+                                       evaluatedWith: app.staticTexts["relay-status"])
+        XCTAssertEqual(XCTWaiter.wait(for: [disconnected], timeout: 15), .completed)
+        XCTAssertTrue(app.staticTexts["observed-location"].label.hasPrefix("37.338100"),
+                      "Disconnecting the relay cleared or changed the held position")
+        print("WAYPOINT_RELAY_DISCONNECT heldCoordinate=true")
     }
 }

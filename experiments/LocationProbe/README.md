@@ -1,13 +1,16 @@
 # Rich location interface probe
 
-This is an isolated experiment, not a new Waypoint location backend. It uses
-`XCUIDevice.shared.location = XCUILocation(location: sample)` with a full
+This is an isolated experiment, not an enabled Waypoint location backend. It uses
+`XCTRunnerDaemonSession.setSimulatedLocation:completion:` with a full
 `CLLocation` carrying speed, speed accuracy, and course. The separate host app
 records the values delivered by its own CLLocationManager callbacks and actual
 Core Motion activity. A setter succeeding does not prove speed was delivered.
 
-Status: source prepared; physical-device delivery and Life360 drive recognition
-are unverified. There is no motion activity setter here. The test does not patch,
+Simulator evidence: run 39362218294 delivered live 0 -> 30 -> 0 m/s phases,
+speed accuracy 0.100 and course 90 to an independent Core Location observer after
+an independent live simctl movement control succeeded. Physical-device delivery,
+runner lifecycle, and Life360 drive recognition are unverified.
+There is no motion activity setter here. The test does not patch,
 inject into, or launch Life360.
 
 ## Build and run
@@ -38,4 +41,23 @@ Sources:
 - https://developer.apple.com/documentation/coremotion/cmmotionactivity/automotive
 - https://github.com/appium/WebDriverAgent/blob/master/WebDriverAgentLib/Utilities/FBXCTestDaemonsProxy.m
 
-The probe uses Apple's public XCTest API directly; it does not copy WebDriverAgent.
+The daemon bridge uses private XCTest runtime selectors guarded for availability;
+the earlier public proxy experiment worked at launch but ignored live updates in
+that fixture. No WebDriverAgent code body or binary is copied into Waypoint.
+
+## App-to-runner transport
+
+`Locus/Engine/RichLocationRelay.swift` defines the sample format and an asynchronous
+loopback client. The probe includes that exact client source. It is linked but
+never instantiated by the production Waypoint app; existing DVT behavior remains.
+The probe host's explicit buttons exercise the client while a separate XCTest
+runner receives authenticated, bounded newline-JSON requests at 127.0.0.1:32777.
+Each runner test generates a fresh 256-bit session credential, passes it only to
+its host process, validates fields/freshness and dispatches to the daemon bridge.
+No Apple password or pairing record is sent through this protocol. It exposes
+no clear/restore operation; a client disconnect only closes its socket.
+
+The next CI revision checks moving/stationary samples through the actual socket
+and client, unauthorized-client rejection, and held position after server stop.
+This does not yet solve production test-session activation, background/lock
+behavior, signing the runner for an individual account, or automotive motion.

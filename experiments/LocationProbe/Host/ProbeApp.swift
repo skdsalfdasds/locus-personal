@@ -24,7 +24,16 @@ struct ProbeApp: App {
                             .accessibilityIdentifier("start-observing")
                         Button("Request simulator control") { observer.requestSimulatorControl() }
                             .accessibilityIdentifier("request-simulator-control")
-                        Text("This app reads iOS values. It does not alter speed or motion activity. The separate XCTest runner changes location only during an explicit probe.")
+                        if ProcessInfo.processInfo.environment["WAYPOINT_PROBE_RELAY_TOKEN"] != nil {
+                            Button("Relay cruise sample") { observer.relay(speed: 30, latitude: 37.3371) }
+                                .accessibilityIdentifier("relay-cruise")
+                            Button("Relay stationary sample") { observer.relay(speed: 0, latitude: 37.3381) }
+                                .accessibilityIdentifier("relay-stationary")
+                            Button("Try unauthorized relay sample") { observer.relay(speed: 90, latitude: 38, unauthorized: true) }
+                                .accessibilityIdentifier("relay-unauthorized")
+                            Text(observer.relaySummary).accessibilityIdentifier("relay-status")
+                        }
+                        Text("This app observes iOS location and motion. Explicit relay buttons send test samples to the separate XCTest runner. No motion activity setter is used.")
                         Text("Observations are stored locally in Documents/location-observations.jsonl. They can contain location data.")
                     }
                 }.navigationTitle("Waypoint Probe")
@@ -40,6 +49,7 @@ final class LocationObserver: NSObject, ObservableObject, CLLocationManagerDeleg
     @Published var motionSummary = "Not observing"
     @Published var authorizationSummary = "Authorization: not requested"
     @Published var sampleCount = 0
+    @Published var relaySummary = "Relay not requested"
     private let location = CLLocationManager()
     private let motion = CMMotionActivityManager()
     private var started = false
@@ -105,6 +115,24 @@ final class LocationObserver: NSObject, ObservableObject, CLLocationManagerDeleg
         guard let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
         try? Data("requested".utf8).write(to: directory.appendingPathComponent("simulator-control.request"), options: .atomic)
         #endif
+    }
+
+    func relay(speed: Double, latitude: Double, unauthorized: Bool = false) {
+        guard let configured = ProcessInfo.processInfo.environment["WAYPOINT_PROBE_RELAY_TOKEN"] else { return }
+        relaySummary = "Sending relay sample"
+        let token = unauthorized ? String(repeating: "0", count: 64) : configured
+        let sample = RichLocationSample(latitude: latitude, longitude: -122.009,
+            altitude: 15, horizontalAccuracy: 5, verticalAccuracy: 5,
+            speed: speed, speedAccuracy: 0.1, course: 90,
+            courseAccuracy: 1, timestamp: Date().timeIntervalSince1970)
+        Task { @MainActor in
+            do {
+                try await RichLocationRelayClient(token: token).send(sample)
+                relaySummary = "Relay accepted"
+            } catch {
+                relaySummary = error.localizedDescription
+            }
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

@@ -12,7 +12,9 @@ targets:
   WaypointLocationProbe:
     type: application
     platform: iOS
-    sources: [Host]
+    sources:
+      - Host
+      - ../../Locus/Engine/RichLocationRelay.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: app.waypoint.locationprobe
@@ -28,7 +30,9 @@ targets:
   WaypointLocationProbeTests:
     type: bundle.ui-testing
     platform: iOS
-    sources: [UITests]
+    sources:
+      - UITests
+      - ../../Locus/Engine/RichLocationRelay.swift
     dependencies:
       - target: WaypointLocationProbe
     settings:
