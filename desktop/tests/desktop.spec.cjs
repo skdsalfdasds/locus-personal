@@ -6,7 +6,8 @@ const fs = require('node:fs');
 
 test('desktop navigation and protected-device controls', {timeout:60000}, async () => {
   const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
-  const application=await _electron.launch({args:[path.join(__dirname,'..'),...(process.env.CI&&process.platform==='linux'?['--no-sandbox']:[])],env});
+  if(process.env.CI)env.DEBUG='pw:browser*';
+  const application=await _electron.launch({args:[path.join(__dirname,'..'),...(process.env.CI&&process.platform==='linux'?['--no-sandbox']:[])],env,timeout:20000});
   try {
     const page=await application.firstWindow({timeout:20000});
     await page.getByRole('heading',{name:'Install Waypoint',exact:true}).waitFor();

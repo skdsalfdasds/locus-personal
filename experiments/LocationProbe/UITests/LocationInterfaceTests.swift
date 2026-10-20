@@ -6,9 +6,14 @@ import CoreLocation
 @MainActor
 final class LocationInterfaceTests: XCTestCase {
     func testRichLocationDelivery() throws {
-        let bundleID = ProcessInfo.processInfo.environment["WAYPOINT_PROBE_HOST_BUNDLE_ID"]
-            ?? "app.waypoint.locationprobe"
-        let app = XCUIApplication(bundleIdentifier: bundleID)
+        // Use the configured target application so XCTest can install its
+        // simulation hooks. Explicit bundle selection remains an opt-in probe.
+        let app: XCUIApplication
+        if let bundleID = ProcessInfo.processInfo.environment["WAYPOINT_PROBE_HOST_BUNDLE_ID"] {
+            app = XCUIApplication(bundleIdentifier: bundleID)
+        } else {
+            app = XCUIApplication()
+        }
         app.launch()
         addUIInterruptionMonitor(withDescription: "Probe observation permissions") { alert in
             for label in ["Allow While Using App", "Allow Once", "OK"] {
@@ -29,6 +34,17 @@ final class LocationInterfaceTests: XCTestCase {
                        "The independent simulator baseline delivered no location; rich-location delivery is inconclusive")
         guard baselineResult == .completed else { return }
         #endif
+        // Check Apple's minimal documented initializer before sending richer
+        // samples. If even coordinates do not change, this is a proxy failure,
+        // not evidence about which fields the proxy preserves.
+        XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 37.3359, longitude: -122.0090))
+        let proxy = expectation(for: NSPredicate(format: "label BEGINSWITH %@", "37.335900"),
+                                evaluatedWith: app.staticTexts["observed-location"])
+        let proxyResult = XCTWaiter.wait(for: [proxy], timeout: 10)
+        print("WAYPOINT_COORDINATE_PROXY \(app.staticTexts["observed-location"].label)")
+        XCTAssertEqual(proxyResult, .completed,
+                       "XCTest coordinate proxy was ignored; this setup cannot establish rich-location delivery")
+        guard proxyResult == .completed else { return }
         // Synthetic public coordinate. Never upload real observed coordinates.
         let latitude = 37.3349
         let longitude = -122.0090
