@@ -14,6 +14,9 @@ final class LocationInterfaceTests: XCTestCase {
         } else {
             app = XCUIApplication()
         }
+        // Follow Apple's documented ordering: configure the proxy before launch.
+        // The independently seeded simulator baseline remains a separate control.
+        XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 37.3354, longitude: -122.0090))
         app.launch()
         addUIInterruptionMonitor(withDescription: "Probe observation permissions") { alert in
             for label in ["Allow While Using App", "Allow Once", "OK"] {
@@ -30,6 +33,7 @@ final class LocationInterfaceTests: XCTestCase {
                                    evaluatedWith: speedLabel)
         let baselineResult = XCTWaiter.wait(for: [baseline], timeout: 10)
         print("WAYPOINT_SIMULATOR_BASELINE \(speedLabel.label)")
+        print("WAYPOINT_LAUNCH_PROXY \(app.staticTexts["observed-location"].label)")
         XCTAssertEqual(baselineResult, .completed,
                        "The independent simulator baseline delivered no location; rich-location delivery is inconclusive")
         guard baselineResult == .completed else { return }
