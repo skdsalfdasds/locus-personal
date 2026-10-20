@@ -14,14 +14,20 @@ final class LocationInterfaceTests: XCTestCase {
         } else {
             app = XCUIApplication()
         }
-        // Follow Apple's documented ordering: configure the proxy before launch.
-        // The independently seeded simulator baseline remains a separate control.
+        // Exercise the live daemon transport independently of the public
+        // launch-time proxy, which was measured in earlier probe runs.
         let launchSample = CLLocation(
             coordinate: CLLocationCoordinate2D(latitude: 37.3354, longitude: -122.0090),
             altitude: 15, horizontalAccuracy: 5, verticalAccuracy: 5,
             course: 90, courseAccuracy: 1, speed: 30, speedAccuracy: 0.1,
             timestamp: Date())
-        XCUIDevice.shared.location = XCUILocation(location: launchSample)
+        let initialReply = WPSetDaemonLocation(launchSample)
+        print("WAYPOINT_DAEMON_INITIAL \(initialReply)")
+        XCTAssertTrue(initialReply["supported"] as? Bool == true,
+                      "This runtime cannot validate the live daemon interface")
+        guard initialReply["supported"] as? Bool == true else { return }
+        XCTAssertTrue(initialReply["accepted"] as? Bool == true, "Daemon rejected the initial location")
+        guard initialReply["accepted"] as? Bool == true else { return }
         app.launch()
         addUIInterruptionMonitor(withDescription: "Probe observation permissions") { alert in
             for label in ["Allow While Using App", "Allow Once", "OK"] {
@@ -55,13 +61,18 @@ final class LocationInterfaceTests: XCTestCase {
         // Check Apple's minimal documented initializer before sending richer
         // samples. If even coordinates do not change, this is a proxy failure,
         // not evidence about which fields the proxy preserves.
-        XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 37.3359, longitude: -122.0090))
+        let liveReply = WPSetDaemonLocation(CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 37.3359, longitude: -122.0090),
+            altitude: 15, horizontalAccuracy: 5, verticalAccuracy: 5,
+            course: 90, courseAccuracy: 1, speed: 30, speedAccuracy: 0.1, timestamp: Date()))
+        print("WAYPOINT_DAEMON_LIVE \(liveReply)")
+        XCTAssertTrue(liveReply["accepted"] as? Bool == true, "Daemon rejected the live coordinate")
         let proxy = expectation(for: NSPredicate(format: "label BEGINSWITH %@", "37.335900"),
                                 evaluatedWith: app.staticTexts["observed-location"])
         let proxyResult = XCTWaiter.wait(for: [proxy], timeout: 10)
         print("WAYPOINT_COORDINATE_PROXY \(app.staticTexts["observed-location"].label)")
         XCTAssertEqual(proxyResult, .completed,
-                       "XCTest coordinate proxy was ignored; this setup cannot establish rich-location delivery")
+                       "Daemon coordinate update was not delivered; this setup cannot establish live rich-location delivery")
         guard proxyResult == .completed else { return }
         // Synthetic public coordinate. Never upload real observed coordinates.
         let latitude = 37.3349
@@ -77,7 +88,8 @@ final class LocationInterfaceTests: XCTestCase {
                         altitude: 15, horizontalAccuracy: 5, verticalAccuracy: 5,
                         course: 90, courseAccuracy: 1, speed: speed, speedAccuracy: 0.1,
                         timestamp: Date())
-                    XCUIDevice.shared.location = XCUILocation(location: sample)
+                    let reply = WPSetDaemonLocation(sample)
+                    XCTAssertTrue(reply["accepted"] as? Bool == true, "Daemon rejected a route sample")
                     RunLoop.current.run(until: Date().addingTimeInterval(0.5))
                 }
                 return app.staticTexts["observed-speed"].label

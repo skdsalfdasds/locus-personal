@@ -36,6 +36,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: app.waypoint.locationprobe.tests
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: WaypointLocationProbe
+        SWIFT_OBJC_BRIDGING_HEADER: UITests/LocationDaemonBridge.h
 schemes:
   WaypointLocationProbe:
     build:
