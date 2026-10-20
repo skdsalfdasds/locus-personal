@@ -16,7 +16,12 @@ final class LocationInterfaceTests: XCTestCase {
         }
         // Follow Apple's documented ordering: configure the proxy before launch.
         // The independently seeded simulator baseline remains a separate control.
-        XCUIDevice.shared.location = XCUILocation(location: CLLocation(latitude: 37.3354, longitude: -122.0090))
+        let launchSample = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 37.3354, longitude: -122.0090),
+            altitude: 15, horizontalAccuracy: 5, verticalAccuracy: 5,
+            course: 90, courseAccuracy: 1, speed: 30, speedAccuracy: 0.1,
+            timestamp: Date())
+        XCUIDevice.shared.location = XCUILocation(location: launchSample)
         app.launch()
         addUIInterruptionMonitor(withDescription: "Probe observation permissions") { alert in
             for label in ["Allow While Using App", "Allow Once", "OK"] {
@@ -38,6 +43,15 @@ final class LocationInterfaceTests: XCTestCase {
                        "The independent simulator baseline delivered no location; rich-location delivery is inconclusive")
         guard baselineResult == .completed else { return }
         #endif
+        let launchFields = app.staticTexts["observed-speed"].label
+        let launchSpeed = launchFields.components(separatedBy: "speed-ms: ").last?
+            .components(separatedBy: " ").first.flatMap(Double.init)
+        print("WAYPOINT_LAUNCH_FIELDS requestedSpeed=30 requestedCourse=90 observed=\(launchFields)")
+        XCTAssertNotNil(launchSpeed, "Launch proxy produced no speed sample")
+        if let launchSpeed {
+            XCTAssertEqual(launchSpeed, 30, accuracy: 0.2,
+                           "The launch proxy did not preserve requested speed")
+        }
         // Check Apple's minimal documented initializer before sending richer
         // samples. If even coordinates do not change, this is a proxy failure,
         // not evidence about which fields the proxy preserves.
