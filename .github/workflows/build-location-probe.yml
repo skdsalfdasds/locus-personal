@@ -45,7 +45,7 @@ jobs:
       - name: Select an available iPhone simulator
         run: |
           set -euo pipefail
-          simulator="$(xcrun simctl list devices available --json | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next(v["udid"] for values in d["devices"].values() for v in values if v["name"].startswith("iPhone")))')"
+          simulator="$(xcrun simctl list devices available --json | python3 -c 'import sys,json,re;d=json.load(sys.stdin);runtimes=sorted((k for k in d["devices"] if "iOS" in k),key=lambda k:tuple(map(int,re.findall(r"[0-9]+",k))),reverse=True);print(next(v["udid"] for k in runtimes for v in d["devices"][k] if v["name"].startswith("iPhone")))')"
           echo "WAYPOINT_SIMULATOR_ID=$simulator" >> "$GITHUB_ENV"
           xcrun simctl boot "$simulator" || true
           xcrun simctl bootstatus "$simulator" -b
@@ -61,7 +61,7 @@ jobs:
           python3 -u simulator-control.py "$WAYPOINT_SIMULATOR_ID" > outputs/simulator-control.log 2>&1 &
           control_pid=$!
           trap 'kill "$control_pid" 2>/dev/null || true' EXIT
-          xcodebuild test -project WaypointLocationProbe.xcodeproj -scheme WaypointLocationProbe -configuration Debug -destination "platform=iOS Simulator,id=$WAYPOINT_SIMULATOR_ID" -derivedDataPath build-simulator -resultBundlePath outputs/LocationProbe.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' DEVELOPMENT_TEAM='' 2>&1 | tee outputs/simulator-run.log
+          xcodebuild test -project WaypointLocationProbe.xcodeproj -scheme WaypointLocationProbe -configuration Debug -destination "platform=iOS Simulator,id=$WAYPOINT_SIMULATOR_ID" -parallel-testing-enabled NO -derivedDataPath build-simulator -resultBundlePath outputs/LocationProbe.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' DEVELOPMENT_TEAM='' 2>&1 | tee outputs/simulator-run.log
       - name: Export simulator observations and test attachments
         if: always()
         working-directory: experiments/LocationProbe

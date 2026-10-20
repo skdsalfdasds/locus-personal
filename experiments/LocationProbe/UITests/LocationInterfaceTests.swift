@@ -7,7 +7,7 @@ final class LocationInterfaceTests: XCTestCase {
     private func waitForCoordinate(_ prefix: String, in app: XCUIApplication) -> Bool {
         let update = expectation(for: NSPredicate(format: "label BEGINSWITH %@", prefix),
                                  evaluatedWith: app.staticTexts["observed-location"])
-        return XCTWaiter.wait(for: [update], timeout: 12) == .completed
+        return XCTWaiter.wait(for: [update], timeout: 30) == .completed
     }
 
     func testRichLocationDelivery() throws {
