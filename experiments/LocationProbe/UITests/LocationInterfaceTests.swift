@@ -19,6 +19,16 @@ final class LocationInterfaceTests: XCTestCase {
         }
         app.buttons["start-observing"].tap()
         app.tap()
+        #if targetEnvironment(simulator)
+        let speedLabel = app.staticTexts["observed-speed"]
+        let baseline = expectation(for: NSPredicate(format: "label != %@", "speed-ms: unavailable"),
+                                   evaluatedWith: speedLabel)
+        let baselineResult = XCTWaiter.wait(for: [baseline], timeout: 10)
+        print("WAYPOINT_SIMULATOR_BASELINE \(speedLabel.label)")
+        XCTAssertEqual(baselineResult, .completed,
+                       "The independent simulator baseline delivered no location; rich-location delivery is inconclusive")
+        guard baselineResult == .completed else { return }
+        #endif
         // Synthetic public coordinate. Never upload real observed coordinates.
         let latitude = 37.3349
         let longitude = -122.0090

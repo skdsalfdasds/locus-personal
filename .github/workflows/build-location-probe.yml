@@ -49,6 +49,9 @@ jobs:
           echo "WAYPOINT_SIMULATOR_ID=$simulator" >> "$GITHUB_ENV"
           xcrun simctl boot "$simulator" || true
           xcrun simctl bootstatus "$simulator" -b
+          # Positive control: establish a location independently of XCTest. A
+          # missing baseline makes the later rich-location result inconclusive.
+          xcrun simctl location "$simulator" set '37.3349,-122.0090'
       - name: Run independent observer test
         working-directory: experiments/LocationProbe
         run: |
