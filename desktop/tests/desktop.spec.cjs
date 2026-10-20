@@ -45,7 +45,8 @@ test('desktop navigation and protected-device controls', {timeout:60000}, async 
       if(protectedDevice)await page.getByText('Active session protected',{exact:true}).waitFor();
       assert.equal(await page.locator('svg,img').count(),0);
       fs.mkdirSync(path.join(__dirname,'../outputs'),{recursive:true});
-      await page.screenshot({path:path.join(__dirname,'../outputs/desktop-dark.png'),fullPage:true});
+      await page.waitForFunction(()=>getComputedStyle(document.querySelector('main')).opacity==='1');
+      await page.screenshot({path:path.join(__dirname,'../outputs/desktop-dark.png'),fullPage:true,animations:'disabled'});
     }finally{await page.evaluate(theme=>window.waypoint.call('settings.save',{theme}),settings.theme);}
     const issues=await page.evaluate(()=>({width:document.documentElement.scrollWidth,viewport:innerWidth}));
     assert.ok(issues.width<=issues.viewport,'Layout must not scroll horizontally');
@@ -82,7 +83,7 @@ test('desktop navigation and protected-device controls', {timeout:60000}, async 
     if(process.env.CI){
       const page=application.windows()[0];
       fs.mkdirSync(path.join(__dirname,'../outputs'),{recursive:true});
-      if(page&&!page.isClosed())await page.screenshot({path:path.join(__dirname,'../outputs/desktop-failure.png')}).catch(()=>{});
+      if(page&&!page.isClosed())await page.screenshot({path:path.join(__dirname,'../outputs/desktop-failure.png'),animations:'disabled'}).catch(()=>{});
     }
     throw error;
   }finally{
