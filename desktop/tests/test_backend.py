@@ -83,6 +83,11 @@ class BackendTests(unittest.IsolatedAsyncioTestCase):
             if self.backend.native_start_lock.locked():self.backend.native_start_lock.release()
 
     async def test_restart_waits_for_previous_pipe_readers(self):
+        # This lifecycle test mocks process creation and must also work before
+        # the real native engine has been compiled on a clean CI runner.
+        fixture_engine=Path(self.temp.name)/'synthetic-engine'
+        fixture_engine.write_bytes(b'synthetic executable fixture')
+        self.backend.native_path=Mock(return_value=fixture_engine)
         release=asyncio.Event()
         reader=asyncio.create_task(release.wait())
         self.backend.native_tasks.add(reader)

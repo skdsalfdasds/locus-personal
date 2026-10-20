@@ -40,7 +40,7 @@ async def main():
             ('session-export','account.exportSession',{}),
             ('session-restore','account.restoreSession',{'session':{'version':1}}))]
         ping = subprocess.run([str(engine)], input=''.join(json.dumps(request)+'\n' for request in requests),
-                              capture_output=True, text=True, env=env, timeout=30, check=True)
+                              capture_output=True, text=True, encoding='utf-8', env=env, timeout=30, check=True)
         replies = {message['id']:message for line in ping.stdout.splitlines() if line.startswith('{')
                    for message in [json.loads(line)]}
         assert replies['ping']['result']['engine'] == 'waypoint-native'

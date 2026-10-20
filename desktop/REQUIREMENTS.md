@@ -33,7 +33,7 @@ Statuses below distinguish implemented code from verification on a physical devi
 | Custom entitlements | Main executable supported for ad-hoc export, including verified entitlement seal; Apple-account/certificate customization remains outstanding |
 | Multiple dylib/framework/bundle/deb injections | Outstanding |
 | Substrate/Substitute support | Outstanding |
-| Keep signing sessions across restart | Implemented password-free native token restoration, encrypted local cache with key in a system credential store, asynchronous startup, reconnect and sign-out. Native/Python mocked lifecycle tests pass; real Apple restoration and actual OS-vault interaction remain unverified |
+| Keep signing sessions across restart | Implemented password-free native token restoration, encrypted local cache with key in a system credential store, asynchronous startup, reconnect and sign-out. Native/Python mocked lifecycle tests and a synthetic Windows Credential Manager roundtrip pass; real Apple restoration and macOS/Linux vault integration remain unverified |
 | Account and certificate management | Read-only listing integrated; explicit revoke/delete UI outstanding |
 | Automatic app refresh daemon and Wi-Fi renewal | Outstanding |
 | Refresh expiry detection and recovery | Installs save actual signed identity, signing-account/team snapshot, private refresh input and earliest readable profile expiry. Manual refresh checks original identity/source integrity, including after waiting for the signing lock. Interrupted operations retain known outcomes and never auto-retry. Automatic scheduling and physical renewal remain outstanding |
