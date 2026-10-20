@@ -168,6 +168,7 @@ tbody tr:hover { background: color-mix(in srgb, var(--sidebar) 40%, transparent)
 .job-state { font-size: 11px; white-space: nowrap; color: var(--muted); }
 .job-state.succeeded { color: var(--success); }
 .job-state.failed { color: var(--error); }
+.job-state.interrupted { color: var(--warning); }
 .empty { padding: 50px 10px; text-align: center; }
 .empty h3 { color: var(--text); font-size: 13px; font-weight: 400; }
 .empty p { font-size: 12px; color: var(--muted); margin-top: 7px; }

@@ -101,6 +101,16 @@ class Backend:
         self.db.execute(f'INSERT OR REPLACE INTO {table} VALUES (?,?)', (data['id'], json.dumps(data)))
         self.db.commit()
 
+    def recover_jobs(self):
+        # Called only on service startup while holding WorkspaceLease. A crash
+        # during upload has an unknown device outcome; never retry it silently.
+        for job in self.records('jobs'):
+            if job.get('status') not in {'queued','running'}:continue
+            job.update(status='interrupted',progress=None,ended=now(),
+                       stage='Interrupted when the device service stopped. Check the device before retrying.')
+            job.setdefault('logs',[]).append({'time':now(),'message':job['stage']})
+            self.save_record('jobs',job)
+
     def native_path(self):
         if os.environ.get('WAYPOINT_NATIVE_ENGINE'):
             return Path(os.environ['WAYPOINT_NATIVE_ENGINE'])
@@ -432,7 +442,15 @@ class Backend:
         await asyncio.gather(*tasks, return_exceptions=True)
         await self.close()
 
-if __name__=='__main__':
+def main():
     import logging
+    from backend.workspace import WorkspaceLease
     logging.basicConfig(level=logging.ERROR,stream=sys.stderr)
-    asyncio.run(Backend().serve())
+    with WorkspaceLease(data_root()):
+        service=Backend()
+        service.recover_jobs()
+        asyncio.run(service.serve())
+
+
+if __name__=='__main__':
+    main()

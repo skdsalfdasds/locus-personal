@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const os=require('node:os');
 const crypto=require('node:crypto');
-const { execFileSync }=require('node:child_process');
+const { execFile,execFileSync }=require('node:child_process');
 
 const root=path.resolve(__dirname,'..');
 function executable(){
@@ -44,6 +44,12 @@ test('assembled desktop launches its bundled services and exports a verified IPA
     assert.equal(built.packaged,true,'This check must run the assembled application');
     const status=await page.evaluate(()=>window.waypoint.call('system.status'));
     assert.equal(status.nativeReady,true);
+    // A second launch must hand focus to this instance and exit, rather than
+    // create another backend that could race an installation or renewal.
+    await new Promise((resolve,reject)=>execFile(executable(),
+      [`--user-data-dir=${path.join(temporary,'profile')}`,...(process.env.CI&&process.platform==='linux'?['--no-sandbox']:[])],
+      {env,windowsHide:true,timeout:15000},error=>error?reject(error):resolve()));
+    assert.equal((await page.evaluate(()=>window.waypoint.call('system.status'))).nativeReady,true);
     if(process.platform==='win32')assert.ok(fs.existsSync(path.join(built.resources,'runtime','VCRUNTIME140.dll')));
     const source=path.join(built.resources,'runtime','apps','Waypoint.ipa');
     const digest=file=>crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -58,7 +64,7 @@ test('assembled desktop launches its bundled services and exports a verified IPA
     assert.equal(digest(source),before);
     const independent=JSON.parse(execFileSync(python(),[path.join(root,'scripts/verify-adhoc.py'),destination,'--expect-task-allow'],
       {encoding:'utf8',windowsHide:true,timeout:30000}));
-    const evidence={platform:process.platform,architecture:process.arch,assembledApp:true,nativeReady:true,
+    const evidence={platform:process.platform,architecture:process.arch,assembledApp:true,nativeReady:true,singleInstance:true,
       sourcePreserved:true,verifiedBinaries:result.verifiedBinaries,...independent};
     fs.mkdirSync(path.join(root,'outputs'),{recursive:true});
     fs.writeFileSync(path.join(root,'outputs',`packaged-${process.platform}-${process.arch}.json`),JSON.stringify(evidence,null,2));

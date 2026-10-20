@@ -1,8 +1,4 @@
-import asyncio
-import logging
-
-from backend.server import Backend
+from backend.server import main
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.ERROR)
-    asyncio.run(Backend().serve())
+    main()

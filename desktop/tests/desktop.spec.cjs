@@ -67,6 +67,7 @@ test('desktop navigation and protected-device controls', {timeout:60000}, async 
         }
         if(method==='setup.check')return {trusted:true,developerMode:true,localDevVPNInstalled:true,waypointInstalled:true};
         if(method==='apps.list'&&global.waypointTestManaged)return [{bundleId:'org.example.synthetic.TESTTEAM',name:'Synthetic app',version:'1.0',managed:true,managedId:'synthetic-managed-app',refreshable:true,sourceAvailable:true,expires:'2030-01-02T00:00:00+00:00',fileSharing:true}];
+        if(method==='jobs.list'&&global.waypointTestManaged)return [{id:'synthetic-interrupted',name:'Interrupted synthetic install',status:'interrupted',stage:'Interrupted when the device service stopped. Check the device before retrying.',progress:null,started:'2030-01-01T00:00:00Z',logs:[],deviceId:'synthetic-phone'}];
         if(['jobs.list','pairings.list','apps.list'].includes(method))return [];
         if(method==='ipa.inspect')return {path:'/synthetic.ipa',filename:'synthetic.ipa',name:'Synthetic app',version:'1.0',size:1024,extensions:[],bundleId:'org.example.synthetic'};
         if(method==='ipa.exportSigned')return {signatureMode:'adhoc',appleProvisioned:false};
@@ -89,6 +90,9 @@ test('desktop navigation and protected-device controls', {timeout:60000}, async 
     await application.evaluate(()=>{global.waypointTestManaged=true;});
     await page.reload();
     await page.waitForFunction(()=>document.querySelector('.statusbar')?.textContent.includes('Device service online'));
+    await page.locator('.sidebar').getByRole('button',{name:'Activity',exact:true}).click();
+    await page.getByRole('cell',{name:'Interrupted',exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Cancel',exact:true}).count(),0);
     await page.locator('.sidebar').getByRole('button',{name:'Applications',exact:true}).click();
     await page.getByRole('table').getByText('Synthetic app',{exact:true}).waitFor();
     assert.equal(await page.locator('time[datetime="2030-01-02T00:00:00+00:00"]').count(),1);

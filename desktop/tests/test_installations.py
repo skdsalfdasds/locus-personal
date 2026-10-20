@@ -73,6 +73,14 @@ class ProfileMetadataTests(unittest.TestCase):
                 archive.writestr('Payload/Demo.app/PlugIns/Test.appex/embedded.mobileprovision',b'broken')
             self.assertIsNone(installation_metadata(path)['expires'])
 
+    def test_oversized_nested_profile_cannot_be_ignored_when_reporting_expiry(self):
+        with tempfile.TemporaryDirectory() as work:
+            path=Path(work)/'app.ipa';ipa(path,datetime(2030,1,10,tzinfo=timezone.utc))
+            with zipfile.ZipFile(path,'a') as archive:
+                archive.writestr('Payload/Demo.app/PlugIns/Test.appex/embedded.mobileprovision',b'x'*1025)
+            with patch('backend.library.PROFILE_LIMIT',1024):
+                self.assertIsNone(installation_metadata(path)['expires'])
+
 
 class InstallTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

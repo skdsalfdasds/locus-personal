@@ -75,6 +75,11 @@ for an in-progress signer before removing its inputs, and never proceeds to
 installation after cancellation. Automatic refresh and session restoration across
 restart are still in development.
 
+Only one desktop instance and one device service can own a workspace. After a
+service crash, unfinished operations are shown as Interrupted with their recorded
+outcome preserved. They are never retried automatically: an interrupted upload
+may already have changed the device.
+
 ## Development
 
 Requirements: Node.js, Python 3.13, Rust, and the platform's native C/C++ build tools.
@@ -110,8 +115,17 @@ be built on the corresponding target; a Windows helper is not a macOS binary.
 
 Apple sign-in, code signing with a real account, a real new installation, and
 pairing transfer have not been exercised end-to-end on an unprotected phone.
-macOS and Linux binaries are not yet verified. See REQUIREMENTS.md for remaining
+Assembled Windows, Linux, Intel Mac and Apple Silicon Mac previews have passed offline
+launch and export checks. See REQUIREMENTS.md for remaining
 work; this build does not yet provide full Sideloadly/idevice_pair parity.
+
+## Interface
+
+The interface uses text navigation, native system fonts, consistent type sizes,
+aligned forms and tables, and advanced settings that expand on demand. Motion is
+limited to page changes, disclosures and operation progress, with reduced-motion
+support. Design references: [progressive disclosure](https://www.nngroup.com/articles/progressive-disclosure/)
+and [consistent type scale](https://design-system.service.gov.uk/styles/type-scale/).
 
 ## Licensing
 

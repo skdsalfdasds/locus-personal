@@ -11,7 +11,7 @@ const navigation: {id:Page;label:string}[] = [
 const pageTitles:Record<Page,string>={setup:'Install Waypoint',sideload:'Sideload an app',applications:'Applications',pairing:'Pairing',accounts:'Accounts & signing',activity:'Activity',settings:'Settings'};
 const deviceName=(d?:Device)=>d?.model==='iPhone17,5'?'iPhone 16e':d?.model?.startsWith('iPad')?'iPad':d?.model?.startsWith('iPhone')?'iPhone':d?.name||'No device';
 const size=(n:number)=>(n/1024/1024).toFixed(1)+' MB';
-const stateName=(s:Job['status'])=>({queued:'Queued',running:'In progress',succeeded:'Completed',failed:'Failed',cancelled:'Cancelled'}[s]);
+const stateName=(s:Job['status'])=>({queued:'Queued',running:'In progress',succeeded:'Completed',failed:'Failed',cancelled:'Cancelled',interrupted:'Interrupted'}[s]);
 function Button({children,kind='',...props}:React.ButtonHTMLAttributes<HTMLButtonElement>&{kind?:string}){
   return <button {...props} className={('button '+kind+' '+(props.className||'')).trim()}>{children}</button>;
 }

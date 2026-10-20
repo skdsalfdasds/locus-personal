@@ -74,7 +74,7 @@ async def settle_signing(backend,params):
 async def run(backend,job,params):
     from backend.server import clean_error
     device_id=params['deviceId'];cache=None;owns_cache=False
-    lock=backend.device_locks.setdefault(device_id,asyncio.Lock())
+    lock=backend.device_locks.setdefault(device_id.casefold(),asyncio.Lock())
     try:
         async with lock:
             backend.require_device_writes(device_id)

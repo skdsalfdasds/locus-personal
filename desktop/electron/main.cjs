@@ -6,6 +6,9 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { fileURLToPath } = require('node:url');
 
+app.setName('Waypoint Desktop');
+const ownsWorkspace = app.requestSingleInstanceLock();
+if (!ownsWorkspace) app.quit();
 let mainWindow, backend, quitting = false;
 const pending = new Map();
 const pairingMethods=['pairing.inspect','pairing.import','pairing.validate','pairing.destinations'];
@@ -58,8 +61,13 @@ function allowedPage(raw) {
 function trusted(event) {
   return event.sender===mainWindow?.webContents&&event.senderFrame===event.sender.mainFrame&&allowedPage(event.senderFrame?.url||'');
 }
-app.whenReady().then(async () => {
-  app.setName('Waypoint Desktop');
+app.on('second-instance', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+});
+if (ownsWorkspace) app.whenReady().then(async () => {
   mainWindow = new BrowserWindow({ width:1390,height:920,minWidth:1060,minHeight:740,title:'Waypoint Desktop',backgroundColor:'#f6f7f8',show:false,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true} });
   Menu.setApplicationMenu(Menu.buildFromTemplate([{label:'Waypoint',submenu:[{label:'About Waypoint',role:'about'},{type:'separator'},{label:'Quit',role:'quit'}]},{label:'Edit',submenu:[{role:'undo'},{role:'redo'},{type:'separator'},{role:'cut'},{role:'copy'},{role:'paste'},{role:'selectAll'}]},{label:'View',submenu:[{role:'reload'},{role:'toggleDevTools'},{type:'separator'},{role:'resetZoom'},{role:'zoomIn'},{role:'zoomOut'}]}]));
   mainWindow.webContents.setWindowOpenHandler(() => ({action:'deny'}));

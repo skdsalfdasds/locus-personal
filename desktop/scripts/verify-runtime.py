@@ -1,10 +1,12 @@
 """Verify bundled executables on their actual OS. Never opens a device service."""
 import asyncio
+from contextlib import closing
 import json
 import os
 from pathlib import Path
 import plistlib
 import subprocess
+import sqlite3
 import tempfile
 import hashlib
 
@@ -27,6 +29,12 @@ async def main():
         env = dict(os.environ, WAYPOINT_DATA_DIR=state, WAYPOINT_NATIVE_DATA=state,
                    WAYPOINT_NATIVE_ENGINE=str(engine), WAYPOINT_BUNDLED_IPA=str(ipa),
                    WAYPOINT_PROTECTION_FILE=str(policy))
+        with closing(sqlite3.connect(Path(state)/'workspace.db')) as previous:
+            previous.execute('CREATE TABLE jobs (id TEXT PRIMARY KEY, data TEXT NOT NULL)')
+            previous.execute('INSERT INTO jobs VALUES (?,?)',('synthetic-interrupted',json.dumps({
+                'id':'synthetic-interrupted','status':'running','logs':[],
+                'progress':40,'result':{'installed':True}})))
+            previous.commit()
         ping = subprocess.run([str(engine)], input='{"id":"ping","method":"ping","params":{}}\n{"id":"validation-api","method":"pairing.validate","params":{}}\n',
                               capture_output=True, text=True, env=env, timeout=30, check=True)
         replies = {message['id']:message for line in ping.stdout.splitlines() if line.startswith('{')
@@ -45,6 +53,18 @@ async def main():
         try:
             status = await call('system.status')
             assert status['result']['nativeReady']
+            recovered=await call('jobs.list')
+            assert recovered['result'][0]['status']=='interrupted'
+            assert recovered['result'][0]['result']['installed'] is True
+            duplicate=await asyncio.create_subprocess_exec(str(backend),stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE,env=env)
+            try:
+                _,failure=await asyncio.wait_for(duplicate.communicate(),15)
+            except asyncio.TimeoutError:
+                duplicate.kill();await duplicate.wait()
+                raise AssertionError('A second frozen service did not reject the busy workspace') from None
+            assert duplicate.returncode!=0
+            assert b'already using this workspace' in failure
             package = await call('ipa.inspect', {'path':str(ipa)})
             assert package['result']['desktopSetupVersion'] == 1
             assert package['result']['bundleId'] == 'com.locus.personal'
@@ -72,7 +92,7 @@ async def main():
             service.stdin.close()
             await asyncio.wait_for(service.wait(),10)
             assert service.returncode == 0
-    print('Native helper, frozen backend, offline ad-hoc export, pairing import and protected-device guard verified on this platform.')
+    print('Native helper, frozen backend, workspace ownership/recovery, offline ad-hoc export, pairing import and protected-device guard verified on this platform.')
 
 
 asyncio.run(main())

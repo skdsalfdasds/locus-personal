@@ -50,7 +50,7 @@ async def run(backend, job, params):
 
     device_id = params['deviceId']
     unique=None;cache=None;owns_cache=False
-    lock = backend.device_locks.setdefault(device_id, asyncio.Lock())
+    lock = backend.device_locks.setdefault(device_id.casefold(), asyncio.Lock())
     try:
         async with lock:
             backend.require_device_writes(device_id)

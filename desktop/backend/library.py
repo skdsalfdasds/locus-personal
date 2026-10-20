@@ -11,10 +11,11 @@ import zipfile
 from asn1crypto import cms
 from backend.packages import checked_entries, main_bundle
 
+PROFILE_LIMIT=16*1024*1024
 
 def profile_expiration(data):
     """Read CMS payload metadata, not a claim that the CMS signature is trusted."""
-    if len(data)>16*1024*1024:raise ValueError('Provisioning metadata exceeds the size limit.')
+    if len(data)>PROFILE_LIMIT:raise ValueError('Provisioning metadata exceeds the size limit.')
     container=cms.ContentInfo.load(data,strict=True)
     if container['content_type'].native!='signed_data':raise ValueError('Not a signed provisioning container.')
     payload=container['content']['encap_content_info']['content'].native
@@ -32,18 +33,21 @@ def installation_metadata(path):
         profiles=[p for p in path.rglob('embedded.mobileprovision')
                   if p.is_file() and not p.is_symlink() and p.resolve().is_relative_to(path.resolve())]
         main_profile=path/'embedded.mobileprovision'
-        profile_data=[(p==main_profile,p.read_bytes()) for p in profiles if p.stat().st_size<=16*1024*1024]
+        profile_data=[(p==main_profile,p.read_bytes() if p.stat().st_size<=PROFILE_LIMIT else None) for p in profiles]
     else:
         with zipfile.ZipFile(path) as archive:
             entries=checked_entries(archive);prefix=main_bundle([item.filename for item in entries])
             info=plistlib.loads(archive.read(prefix+'Info.plist'))
-            profile_data=[(item.filename==prefix+'embedded.mobileprovision',archive.read(item))
+            profile_data=[(item.filename==prefix+'embedded.mobileprovision',archive.read(item) if item.file_size<=PROFILE_LIMIT else None)
                 for item in entries if item.filename.startswith(prefix) and item.filename.endswith('/embedded.mobileprovision')
-                and item.file_size<=16*1024*1024]
+                ]
     bundle=info.get('CFBundleIdentifier')
     if not isinstance(bundle,str) or not bundle:raise ValueError('The signed app has no bundle identifier.')
     dates=[];main_expiry=None;invalid=False
     for main,data in profile_data:
+        if data is None:
+            invalid=True
+            continue
         try:
             expiry=profile_expiration(data);dates.append(expiry)
             if main:main_expiry=expiry
