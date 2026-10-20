@@ -62,14 +62,8 @@ export default function Setup({device,status,jobs,onJob,onError,onActivity}:Prop
     !preflight.developerMode?'Enable Developer Mode to continue.':
     !status?.nativeReady?'The signing engine is unavailable.':'';
   return <div className="setup-page">
-    <div className="setup-intro">
-      <h2>Waypoint for iPhone</h2>
-      <p>Sign, install, and pair in one session.</p>
-      <span className="setup-version">Version 1.5.2</span>
-    </div>
-
-    <section className="setup-row" aria-labelledby="device-heading">
-      <div className="setup-label"><h3 id="device-heading">Device</h3></div>
+    <aside className="setup-device" aria-labelledby="device-heading">
+      <h2 id="device-heading">Device</h2>
       <div className="setup-body">
         <div className="device-heading">
           <div><strong>{deviceName}</strong><p>{device?'iOS '+(device.osVersion||'—')+' · '+device.transport:'Connect your iPhone with a USB cable, then unlock it.'}</p></div>
@@ -83,11 +77,12 @@ export default function Setup({device,status,jobs,onJob,onError,onActivity}:Prop
           <div><dt>LocalDevVPN</dt><dd>{preflight?preflight.localDevVPNInstalled?'Installed':'Not installed':checking?'Checking…':'Not checked'}</dd></div>
         </dl>}
         {preflight&&!preflight.developerMode&&!protectedDevice&&<p className="fine-print">Enable Developer Mode in iPhone Settings under Privacy & Security. iOS requires a restart; Waypoint does not restart your device.</p>}
+        <div className="setup-vpn"><h3>LocalDevVPN</h3><p>Connect LocalDevVPN on your iPhone before using Waypoint.</p><button className="text-button" onClick={()=>window.waypoint?.openExternal('https://apps.apple.com/us/app/localdevvpn/id6755608044')}>Get LocalDevVPN</button></div>
       </div>
-    </section>
+    </aside>
 
-    <section className="setup-row" aria-labelledby="account-heading">
-      <div className="setup-label"><h3 id="account-heading">{running||job?.status==='succeeded'?'Installation':'Apple account'}</h3>{!running&&job?.status!=='succeeded'&&<p>Used to sign the app.</p>}</div>
+    <section className="setup-account" aria-labelledby="account-heading">
+      <div className="setup-label"><h2 id="account-heading">{running||job?.status==='succeeded'?'Installation':'Apple account'}</h2>{!running&&job?.status!=='succeeded'&&<p>Sign in to create a developer signature for Waypoint.</p>}</div>
       <div className="setup-body">
         {job?.status==='succeeded'?<div className="install-finished page-enter"><h3>Installation complete</h3><p>Open Waypoint on your iPhone, then connect LocalDevVPN and approve its VPN configuration.</p><button className="button" onClick={onActivity}>View installation log</button></div>:running?<div className="setup-running page-enter" role="status"><h3>{job?.stage||'Starting setup…'}</h3><p>Keep your iPhone connected and unlocked.</p><div className="installation-progress"><div><button type="button" className="text-button" onClick={onActivity}>View log</button>{job?.progress!==null&&job?.progress!==undefined&&<span>{Math.round(job.progress)}%</span>}</div>{job?.progress!==null&&job?.progress!==undefined&&<div className="progress-track"><span style={{width:Math.max(2,job.progress)+'%'}}/></div>}</div></div>:<form onSubmit={start} className="install-form">
           {accountReady?<p className="account-connected">Your Apple account is connected.</p>:<>
@@ -118,6 +113,5 @@ export default function Setup({device,status,jobs,onJob,onError,onActivity}:Prop
       </div>
     </section>
 
-    <div className="setup-footnote"><p>After installation, open Waypoint and connect LocalDevVPN on your iPhone.</p><button className="text-button" onClick={()=>window.waypoint?.openExternal('https://apps.apple.com/us/app/localdevvpn/id6755608044')}>Get LocalDevVPN</button></div>
   </div>;
 }

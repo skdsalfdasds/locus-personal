@@ -10,6 +10,7 @@ const navigation: {id:Page;label:string}[] = [
   {id:'accounts',label:'Accounts'}, {id:'activity',label:'Activity'},
 ];
 const pageTitles:Record<Page,string>={setup:'Install Waypoint',sideload:'Sideload an app',applications:'Applications',pairing:'Pairing',accounts:'Accounts & signing',activity:'Activity',settings:'Settings'};
+const pageDescriptions:Record<Page,string>={setup:'Install the iPhone app and save its pairing record.',sideload:'Prepare, sign, and install an IPA from your computer.',applications:'Manage the applications installed on your device.',pairing:'Create and manage trusted device connections.',accounts:'Manage your Apple account and signing certificates.',activity:'Installation progress and operation history.',settings:'Desktop appearance and service preferences.'};
 const deviceName=(d?:Device)=>d?.model==='iPhone17,5'?'iPhone 16e':d?.model?.startsWith('iPad')?'iPad':d?.model?.startsWith('iPhone')?'iPhone':d?.name||'No device';
 const size=(n:number)=>(n/1024/1024).toFixed(1)+' MB';
 const stateName=(s:Job['status'])=>({queued:'Queued',running:'In progress',succeeded:'Completed',failed:'Failed',cancelled:'Cancelled',interrupted:'Interrupted'}[s]);
@@ -196,12 +197,12 @@ export default function App(){
 
   return <div className="app-shell">
     <aside className="sidebar">
-      <div className="wordmark">Waypoint</div>
-      <nav aria-label="Workspace">{navigation.map(({id,label})=><button key={id} className={page===id?'selected':''} aria-current={page===id?'page':undefined} onClick={()=>{setPage(id);setSearch('');}}><span>{label}</span>{id==='activity'&&running.length>0&&<small>{running.length}</small>}</button>)}</nav>
+      <div className="wordmark">Waypoint<span>Desktop</span></div>
+      <nav aria-label="Workspace">{[{label:'Install',items:navigation.slice(0,2)},{label:'Manage',items:navigation.slice(2)}].map(group=><div className="nav-group" key={group.label}><p>{group.label}</p>{group.items.map(({id,label})=><button key={id} className={page===id?'selected':''} aria-current={page===id?'page':undefined} onClick={()=>{setPage(id);setSearch('');}}><span>{label}</span>{id==='activity'&&running.length>0&&<small>{running.length}</small>}</button>)}</div>)}</nav>
       <div className="sidebar-bottom"><button className={page==='settings'?'selected':''} onClick={()=>setPage('settings')}>Settings</button><button onClick={()=>window.waypoint?.openExternal('https://github.com/jkcoxson/idevice_pair#usage')}>Help & documentation</button><p>Version {status?.version||'0.1.0'}<span>Development build</span></p></div>
     </aside>
     <div className="workspace">
-      <header className="workspace-header"><h1>{pageTitles[page]}</h1><div><button className="text-button muted" onClick={()=>perform('refresh',refresh)}>{busy==='refresh'?'Checking…':'Refresh'}</button><select aria-label="Selected device" value={device?.id||''} onChange={e=>setSelected(e.target.value)}><option value="" disabled>No device connected</option>{devices.map(d=><option key={d.id} value={d.id}>{hidden?deviceName(d):d.name}</option>)}</select></div></header>
+      <header className="workspace-header"><div className="page-heading"><h1>{pageTitles[page]}</h1><p>{pageDescriptions[page]}</p></div><div className="workspace-tools"><button className="text-button muted" onClick={()=>perform('refresh',refresh)}>{busy==='refresh'?'Checking…':'Refresh'}</button><select aria-label="Selected device" value={device?.id||''} onChange={e=>setSelected(e.target.value)}><option value="" disabled>No device connected</option>{devices.map(d=><option key={d.id} value={d.id}>{hidden?deviceName(d):d.name}</option>)}</select></div></header>
       <main key={page} className="page-enter">
         {error&&<div className="message error" role="alert"><p>{error}</p><button className="text-button" onClick={()=>setError('')}>Dismiss</button></div>}
         {blocked&&page!=='setup'&&<div className="protection-strip">This iPhone is protected. Installation, pairing changes, and device settings changes are disabled.</div>}

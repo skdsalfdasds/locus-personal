@@ -8,6 +8,18 @@ Electron, Python, the device service, a native Rust signing/pairing helper, and
 the unsigned Waypoint 1.5.2 package. Installing the desktop application does not
 install anything on a phone. Phone setup starts only after an explicit action.
 
+## Desktop interface
+
+Navigation uses text labels grouped by task. Installation keeps the account form
+beside a device inspector, while secondary signing options remain collapsed.
+Shared spacing, restrained colors, and native system fonts carry the hierarchy;
+there are no decorative icons, app thumbnails, gradients, or marketing panels.
+Light and dark themes use the same layout. Navigation and real operation progress
+have brief transitions, disabled when reduced motion is requested.
+
+Design references: [visual hierarchy](https://www.nngroup.com/articles/visual-hierarchy-ux-definition/)
+and [icon usability](https://www.nngroup.com/articles/icon-usability/).
+
 ## Automatic Waypoint setup
 
 1. Connect and unlock a supported iPhone.
