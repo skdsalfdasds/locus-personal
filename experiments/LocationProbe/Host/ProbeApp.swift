@@ -13,6 +13,7 @@ struct ProbeApp: App {
                         Text(observer.authorizationSummary).accessibilityIdentifier("observed-authorization")
                         Text(observer.locationSummary).accessibilityIdentifier("observed-location")
                         Text(observer.speedSummary).accessibilityIdentifier("observed-speed")
+                        Text("Samples: \(observer.sampleCount)").accessibilityIdentifier("observed-count")
                         Text(observer.sourceSummary)
                     }
                     Section("Actual motion activity") {
@@ -21,6 +22,8 @@ struct ProbeApp: App {
                     Section {
                         Button("Start observing") { observer.start() }
                             .accessibilityIdentifier("start-observing")
+                        Button("Request simulator control") { observer.requestSimulatorControl() }
+                            .accessibilityIdentifier("request-simulator-control")
                         Text("This app reads iOS values. It does not alter speed or motion activity. The separate XCTest runner changes location only during an explicit probe.")
                         Text("Observations are stored locally in Documents/location-observations.jsonl. They can contain location data.")
                     }
@@ -36,6 +39,7 @@ final class LocationObserver: NSObject, ObservableObject, CLLocationManagerDeleg
     @Published var sourceSummary = "No source information"
     @Published var motionSummary = "Not observing"
     @Published var authorizationSummary = "Authorization: not requested"
+    @Published var sampleCount = 0
     private let location = CLLocationManager()
     private let motion = CMMotionActivityManager()
     private var started = false
@@ -77,12 +81,12 @@ final class LocationObserver: NSObject, ObservableObject, CLLocationManagerDeleg
                 "timestamp": Date().timeIntervalSince1970])
         if started && (status == .authorizedWhenInUse || status == .authorizedAlways) {
             manager.startUpdatingLocation()
-            manager.requestLocation()
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         for sample in locations {
+            sampleCount += 1
             let age = Date().timeIntervalSince(sample.timestamp)
             locationSummary = String(format: "%.6f, %.6f · age %.1fs", sample.coordinate.latitude, sample.coordinate.longitude, age)
             speedSummary = String(format: "speed-ms: %.3f · accuracy: %.3f · course: %.2f", sample.speed, sample.speedAccuracy, sample.course)
@@ -94,6 +98,13 @@ final class LocationObserver: NSObject, ObservableObject, CLLocationManagerDeleg
                     "timestamp": sample.timestamp.timeIntervalSince1970,
                     "simulatedBySoftware": sample.sourceInformation?.isSimulatedBySoftware ?? false])
         }
+    }
+
+    func requestSimulatorControl() {
+        #if targetEnvironment(simulator)
+        guard let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        try? Data("requested".utf8).write(to: directory.appendingPathComponent("simulator-control.request"), options: .atomic)
+        #endif
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

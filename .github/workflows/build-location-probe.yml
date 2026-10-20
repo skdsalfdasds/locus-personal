@@ -58,6 +58,9 @@ jobs:
           set -euo pipefail
           xcodegen generate
           mkdir -p outputs
+          python3 -u simulator-control.py "$WAYPOINT_SIMULATOR_ID" > outputs/simulator-control.log 2>&1 &
+          control_pid=$!
+          trap 'kill "$control_pid" 2>/dev/null || true' EXIT
           xcodebuild test -project WaypointLocationProbe.xcodeproj -scheme WaypointLocationProbe -configuration Debug -destination "platform=iOS Simulator,id=$WAYPOINT_SIMULATOR_ID" -derivedDataPath build-simulator -resultBundlePath outputs/LocationProbe.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' DEVELOPMENT_TEAM='' 2>&1 | tee outputs/simulator-run.log
       - name: Export simulator observations and test attachments
         if: always()
