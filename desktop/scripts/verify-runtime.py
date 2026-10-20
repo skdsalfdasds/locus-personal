@@ -15,6 +15,12 @@ async def main():
     engine = root/'runtime'/('waypoint-engine'+suffix)
     backend = root/'runtime/waypoint-backend'/('waypoint-backend'+suffix)
     ipa = root/'runtime/apps/Waypoint.ipa'
+    if os.name=='nt':
+        libraries=list((root/'runtime').glob('vcruntime140*.dll'))
+        assert libraries,'Native helper VC runtime is missing'
+        for library in libraries:
+            bundled=backend.parent/'_internal'/library.name
+            assert hashlib.sha256(library.read_bytes()).digest()==hashlib.sha256(bundled.read_bytes()).digest()
     with tempfile.TemporaryDirectory() as state:
         policy=Path(state)/'protection.json'
         policy.write_text(json.dumps({'protectedDeviceIds':['synthetic-protected-phone']}),encoding='utf-8')
@@ -66,7 +72,7 @@ async def main():
             service.stdin.close()
             await asyncio.wait_for(service.wait(),10)
             assert service.returncode == 0
-    print('Native helper, frozen backend, bundled IPA, pairing import and protected-device guard verified on this platform.')
+    print('Native helper, frozen backend, offline ad-hoc export, pairing import and protected-device guard verified on this platform.')
 
 
 asyncio.run(main())

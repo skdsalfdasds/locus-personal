@@ -23,6 +23,14 @@ subprocess.run([
     str(root/'backend/entry.py'),
 ], check=True, cwd=root)
 shutil.copy2(engine, runtime/name)
-if sys.platform != 'win32':
+if sys.platform == 'win32':
+    # The native helper is outside the Python onedir loader. Give it the same
+    # bundled VC runtime so it does not depend on a system-wide VC installation.
+    libraries=list((runtime/'waypoint-backend/_internal').glob('vcruntime140*.dll'))
+    if not libraries:
+        raise SystemExit('The frozen Python distribution did not include the required VC runtime.')
+    for library in libraries:
+        shutil.copy2(library,runtime/library.name)
+else:
     (runtime/name).chmod(0o755)
 print('Runtime ready:', runtime)

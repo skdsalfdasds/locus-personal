@@ -29,7 +29,7 @@ Statuses below distinguish implemented code from verification on a physical devi
 | Certificate/profile signing | Native engine integrated; live signing/installation verification outstanding |
 | Normal install of already-signed IPA | Implemented; rejects unsigned customization in this mode |
 | Modified unsigned IPA export | Implemented and tested |
-| Ad-hoc signing/export | Implemented offline; actual Waypoint export independently verified across 1,861 code pages, tamper rejection and source preservation; frozen-runtime check in progress |
+| Ad-hoc signing/export | Implemented offline; actual Waypoint export independently verified across 1,861 code pages, tamper rejection and source preservation; frozen Windows runtime passed the same checks |
 | Custom entitlements | Main executable supported for ad-hoc export, including verified entitlement seal; Apple-account/certificate customization remains outstanding |
 | Multiple dylib/framework/bundle/deb injections | Outstanding |
 | Substrate/Substitute support | Outstanding |
@@ -51,7 +51,7 @@ Statuses below distinguish implemented code from verification on a physical devi
 | Windows one-click desktop installer | Packaged preview built and launched; frozen runtime, pairing import and write protection verified |
 | macOS and Linux installers | First Linux native/UI/runtime checks passed; packaging metadata fixed after failure. Windows development-Python startup and offline service handling fixed. Older Mac UI jobs stalled; new test cleanup/step deadlines added. Revised CI validation outstanding |
 | License/source distribution completeness | Core notices prepared; full bundled dependency/source inventory outstanding before public release |
-| Rich speed location interface investigation | XCTest observer compiles; instrumented run had authorized location access but kCLErrorDomain 0 and no callbacks. Inconclusive about speed. Separate simulator baseline added and running; never run on protected phone |
+| Rich speed location interface investigation | Simulator baseline succeeds after independent seeding; XCTest proxy leaves both coordinate and speed unchanged. This does not isolate speed delivery. Default target initialization plus a coordinate delivery gate added and running; never run on protected phone |
 | Life360 recognizes simulated driving activity | Unverified. No supported Core Motion automotive setter identified; coordinate speed alone does not prove drive recognition |
 
 ## Protected-phone constraint
