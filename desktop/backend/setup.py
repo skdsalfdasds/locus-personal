@@ -72,9 +72,9 @@ async def run(backend, job, params):
 
             if not backend.account:
                 backend.update_job(job, 'Signing in to Apple', progress=12)
-                login = {key: params[key] for key in ('email', 'password', 'anisetteUrl') if params.get(key)}
+                login = {key: params[key] for key in ('email', 'password', 'anisetteUrl', 'rememberSession') if key in params}
                 try:
-                    backend.account = await backend.native_call('account.login', login)
+                    await backend.login_account(login)
                 finally:
                     login.pop('password', None)
                     params.pop('password', None)
@@ -109,7 +109,7 @@ async def run(backend, job, params):
             job['result']={'installed':True,'pairingTransferred':False,'bundleId':actual_bundle_id}
             if metadata['name']==actual_bundle_id:metadata['name']=package['name']
             if not metadata['version']:metadata['version']=package['version']
-            entry=await remember_install(backend,device_id,metadata,unique,{'path':str(path),'mode':'appleId'})
+            entry=await remember_install(backend,device_id,metadata,unique,{'path':str(path),'mode':'appleId'},signed.get('signingAccount'))
             job['result']['libraryId']=entry['id']
             backend.require_device_writes(device_id)
             backend.update_job(job, 'Creating remote pairing', progress=80)

@@ -41,7 +41,7 @@ def protection_file():
     return data_root() / 'device-protection.json'
 
 class Backend:
-    def __init__(self, root=None, emit=None):
+    def __init__(self, root=None, emit=None, session_store=None):
         self.root = Path(root) if root else data_root()
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.emit = emit or (lambda value: print(json.dumps(value, default=str), flush=True))
@@ -56,6 +56,10 @@ class Backend:
         self.native_pending = {}
         self.native_prompts = {}
         self.account = None
+        self.account_lock = asyncio.Lock()
+        from backend.sessions import SessionStore
+        self.session_store = session_store if session_store is not None else SessionStore(self.root)
+        self.session_state = {'saved':False,'restored':False,'status':'none'}
         self.native_start_lock = asyncio.Lock()
         self.native_tasks = set()
 
@@ -127,19 +131,36 @@ class Backend:
     async def start_native(self):
         if self.native and self.native.returncode is None:
             return
+        # Finish the previous process's pipe readers before assigning a new
+        # process. Otherwise an old EOF could erase the replacement session.
+        previous=list(self.native_tasks)
+        if previous:
+            _,pending=await asyncio.wait(previous,timeout=3)
+            for task in pending:task.cancel()
+            await asyncio.gather(*previous,return_exceptions=True)
+            for future in self.native_pending.values():
+                if not future.done():future.set_exception(RuntimeError('The native engine exited. Reconnect before retrying.'))
+            self.native_pending.clear()
+        if self.native:
+            self.account=None
+            if self.session_state.get('saved') and self.session_state.get('status')!='restoring':
+                self.session_state.update(restored=False,status='unavailable',
+                    message='The signing service disconnected. Reconnect your saved sign-in.')
         engine = self.native_path()
         if not engine.is_file():
             raise RuntimeError('The native signing engine is not built yet. Device discovery and IPA editing are available.')
         env = dict(os.environ, WAYPOINT_NATIVE_DATA=str(self.root / 'native'))
         self.native_prompts.clear()
         self.native = await asyncio.create_subprocess_exec(str(engine), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env)
-        for coroutine in (self.read_native(), self.drain_native_errors()):
+        for coroutine in (self.read_native(self.native), self.drain_native_errors(self.native)):
             task = asyncio.create_task(coroutine)
             self.native_tasks.add(task)
             task.add_done_callback(self.native_tasks.discard)
 
-    async def read_native(self):
-        while line := await self.native.stdout.readline():
+    async def read_native(self,process=None):
+        process=process or self.native
+        while line := await process.stdout.readline():
+            if process is not self.native:return
             try:
                 message = json.loads(line)
                 if 'id' in message:
@@ -159,6 +180,7 @@ class Backend:
                     self.emit(message)
             except (ValueError, KeyError):
                 continue
+        if process is not self.native:return
         for future in self.native_pending.values():
             if not future.done():
                 future.set_exception(RuntimeError('The native engine exited. Reopen the operation to try again.'))
@@ -167,36 +189,41 @@ class Backend:
             self.emit({'event':'promptClosed','promptId':prompt_id})
         self.native_prompts.clear()
         self.account=None
+        if self.session_state.get('saved') and self.session_state.get('status')!='restoring':
+            self.session_state.update(restored=False,status='unavailable',
+                message='The signing service disconnected. Reconnect your saved sign-in.')
 
-    async def drain_native_errors(self):
+    async def drain_native_errors(self,process=None):
+        process=process or self.native
         # Native diagnostics may contain account context. Do not forward raw stderr.
-        while await self.native.stderr.readline():
+        while await process.stderr.readline():
             pass
 
     async def native_call(self, method, params):
         if method in {'pairing.createRemote', 'pairing.validate', 'ipa.sign'}:
             self.require_device_writes(params.get('deviceId'))
         await self.ensure_native()
+        process=self.native
         identifier = str(uuid.uuid4())
         future = asyncio.get_running_loop().create_future()
         self.native_pending[identifier] = future
-        self.native.stdin.write((json.dumps({'id': identifier, 'method': method, 'params': params})+'\n').encode())
-        await self.native.stdin.drain()
         try:
-            return await asyncio.wait_for(future, NATIVE_TIMEOUT_SECONDS)
+            process.stdin.write((json.dumps({'id': identifier, 'method': method, 'params': params})+'\n').encode())
+            await process.stdin.drain()
+            return await asyncio.wait_for(future, min(NATIVE_TIMEOUT_SECONDS,45) if method=='account.restoreSession' else NATIVE_TIMEOUT_SECONDS)
         except asyncio.TimeoutError:
             # A signer that exceeded its deadline must stop before its caller
             # cleans up input files. Its in-memory Apple session is no longer live.
             async with self.native_start_lock:
-                process=self.native
-                if process and process.returncode is None:
-                    process.terminate()
-                    try:await asyncio.wait_for(process.wait(),3)
-                    except asyncio.TimeoutError:
-                        process.kill();await process.wait()
-                await asyncio.gather(*list(self.native_tasks),return_exceptions=True)
-                self.account=None
-            raise RuntimeError('The native signing operation timed out. Sign in again before retrying.') from None
+                if process is self.native:
+                    if process.returncode is None:
+                        process.terminate()
+                        try:await asyncio.wait_for(process.wait(),3)
+                        except asyncio.TimeoutError:
+                            process.kill();await process.wait()
+                    await asyncio.gather(*list(self.native_tasks),return_exceptions=True)
+                    self.account=None
+            raise RuntimeError('The native signing operation timed out. Check the account connection before retrying.') from None
         finally:
             self.native_pending.pop(identifier, None)
 
@@ -242,7 +269,7 @@ class Backend:
 
     def settings(self):
         row=self.db.execute('SELECT data FROM settings WHERE id=1').fetchone()
-        return {'theme':'light','hideSensitive':True,'autoRefresh':False,'refreshHours':24, 'anisetteUrl':'https://ani.sidestore.io' if sys.platform=='win32' else '','startAtLogin':False, **(json.loads(row[0]) if row else {})}
+        return {'theme':'light','hideSensitive':True,'autoRefresh':False,'refreshHours':24, 'anisetteUrl':'https://ani.sidestore.io' if sys.platform=='win32' else '','startAtLogin':False,'rememberSession':True,'sessionSaved':False, **(json.loads(row[0]) if row else {})}
 
     async def dispatch(self, method, p):
         if not isinstance(p, dict):
@@ -250,7 +277,7 @@ class Backend:
         if method in {'install.start','setup.start','app.uninstall','pairing.createRemote','pairing.createLockdown','pairing.install','pairing.validate','device.enableWireless','ipa.sign'}:
             self.require_device_writes(p.get('deviceId'))
         if method == 'system.status':
-            return {'version':'0.1.0','platform':sys.platform,'architecture':platform.machine(),'nativeReady':self.native_path().is_file(),'nativePath':str(self.native_path()),'account':self.account,'dataDirectory':str(self.root),'settings':self.settings()}
+            return {'version':'0.1.0','platform':sys.platform,'architecture':platform.machine(),'nativeReady':self.native_path().is_file(),'nativePath':str(self.native_path()),'account':self.account,'session':self.session_state,'dataDirectory':str(self.root),'settings':self.settings()}
         if method == 'settings.get': return self.settings()
         if method == 'settings.save':
             allowed={'theme','hideSensitive','autoRefresh','refreshHours','anisetteUrl','startAtLogin'}
@@ -386,8 +413,16 @@ class Backend:
                 await device.set_value(value=bool(p['enabled']),domain='com.apple.mobile.wireless_lockdown',key='EnableWifiDebugging')
             return {'ok':True}
         if method == 'account.login':
-            self.account=await self.native_call(method,p)
-            return self.account
+            return await self.login_account(p)
+        if method == 'account.restore':
+            from backend.accounts import restore
+            return await restore(self)
+        if method == 'account.selectTeam':
+            from backend.accounts import select_team
+            return await select_team(self,p.get('teamId'))
+        if method == 'account.logout':
+            from backend.accounts import logout
+            return await logout(self)
         if method == 'prompt.reply':
             from backend.prompts import verification_answer
             identifier=p.get('promptId')
@@ -398,9 +433,9 @@ class Backend:
             self.native_prompts.pop(identifier,None)
             self.native.stdin.write((json.dumps({'method':method,'params':{'promptId':identifier,'answer':answer}})+'\n').encode());await self.native.stdin.drain()
             return {'ok':True}
-        if method in {'account.logout','account.certificates','account.appIds','identity.import','profile.import','ipa.sign'}:
+        if method=='ipa.sign':return await self.sign_ipa(p)
+        if method in {'account.certificates','account.appIds','identity.import','profile.import'}:
             result=await self.native_call(method,p)
-            if method=='account.logout':self.account=None
             return result
         if method=='app.refresh':
             item=next((entry for entry in self.records('library') if entry['id']==p.get('libraryId')),None)
@@ -413,10 +448,13 @@ class Backend:
             if not self.account:raise ValueError('Sign in to Apple before refreshing this app.')
             if item.get('accountEmail') and str(self.account.get('email','')).casefold()!=item['accountEmail'].casefold():
                 raise ValueError('Sign in with the Apple account used for this installation.')
+            if item.get('accountTeamId') and (self.account.get('team') or {}).get('id')!=item['accountTeamId']:
+                raise ValueError('Select the developer team used for this installation before refreshing it.')
             return await self.dispatch('install.start',{
                 'deviceId':item['deviceId'],'path':item['sourcePath'],'mode':'appleId',
                 'name':'Refresh '+item.get('name','app'),'expectedSourceSha256':item['sourceSha256'],
-                'originalPath':item.get('originalPath')})
+                'originalPath':item.get('originalPath'),'expectedAccountEmail':item.get('accountEmail'),
+                'expectedTeamId':item.get('accountTeamId')})
         if method=='install.start':
             if p.get('mode','appleId') not in {'appleId','certificate','existing'}:
                 raise ValueError('Choose Apple account, certificate or an existing signature for installation.')
@@ -443,6 +481,25 @@ class Backend:
         from backend.installations import run
         await run(self,job,p)
 
+    async def login_account(self,params):
+        from backend.accounts import login
+        return await login(self,params)
+
+    async def sign_ipa(self,params,on_started=None):
+        if params.get('mode','appleId')!='appleId':
+            if on_started:on_started()
+            return await self.native_call('ipa.sign',params)
+        async with self.account_lock:
+            if not self.account:raise ValueError('Sign in to Apple before signing this app.')
+            email=self.account.get('email');team=(self.account.get('team') or {}).get('id')
+            if params.get('expectedAccountEmail') and str(email or '').casefold()!=params['expectedAccountEmail'].casefold():
+                raise ValueError('Sign in with the Apple account used for this installation.')
+            if params.get('expectedTeamId') and team!=params['expectedTeamId']:
+                raise ValueError('Select the developer team used for this installation before refreshing it.')
+            if on_started:on_started()
+            result=await self.native_call('ipa.sign',params)
+            return {**result,'signingAccount':{'email':email,'teamId':team}}
+
     async def serve(self):
         async def respond(request):
             try:
@@ -451,6 +508,10 @@ class Backend:
             except Exception as error:
                 self.emit({'id':request.get('id'),'error':{'message':clean_error(error),'type':type(error).__name__}})
         tasks=set()
+        if self.settings().get('rememberSession') and self.settings().get('sessionSaved') and self.session_store.exists():
+            from backend.accounts import restore
+            restoration=asyncio.create_task(restore(self));tasks.add(restoration)
+            restoration.add_done_callback(tasks.discard)
         while line:=await asyncio.to_thread(sys.stdin.readline):
             try:request=json.loads(line)
             except ValueError:continue

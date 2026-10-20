@@ -97,6 +97,7 @@ class InstallTests(unittest.IsolatedAsyncioTestCase):
         ipa(self.source,self.expiry);self.original=self.source.read_bytes()
         self.installed=[];self.native_calls=[];self.device_calls=[]
         self.flip_after_signing=False;self.flip_on_connect=False;self.sign_failure=False
+        self.account_after_install=None
         self.started=None;self.release=None;self.sign_input_existed=False
         self.params={'deviceId':'synthetic-phone','path':str(self.source),'mode':'appleId'}
 
@@ -132,6 +133,7 @@ class InstallTests(unittest.IsolatedAsyncioTestCase):
             async def __aexit__(self,*_):pass
             async def install_from_local(self,path,handler):
                 owner.installed.append(installation_metadata(path)['bundleId']);handler(100)
+                if owner.account_after_install:owner.backend.account=owner.account_after_install
         self.service=patch('pymobiledevice3.services.installation_proxy.InstallationProxyService',Service)
         self.service.start()
 
@@ -187,6 +189,48 @@ class InstallTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError,'Apple account used'):
             await self.backend.dispatch('app.refresh',{'libraryId':entry['id']})
         self.assertEqual(len(self.installed),1)
+
+    async def test_library_tracks_the_signing_team_even_if_account_changes_during_upload(self):
+        self.backend.account={'email':'test@example.invalid','team':{'id':'TESTTEAM'}}
+        self.account_after_install={'email':'test@example.invalid','team':{'id':'OTHERTEAM'}}
+        await self.install();entry=self.backend.records('library')[0]
+        self.assertEqual(entry['accountTeamId'],'TESTTEAM')
+        with self.assertRaisesRegex(ValueError,'developer team'):
+            await self.backend.dispatch('app.refresh',{'libraryId':entry['id']})
+        self.assertEqual(len(self.installed),1)
+
+    async def test_team_changed_while_refresh_waits_cannot_sign_under_another_team(self):
+        self.backend.account={'email':'test@example.invalid','team':{'id':'TESTTEAM'}}
+        await self.install();entry=self.backend.records('library')[0]
+        await self.backend.account_lock.acquire()
+        try:
+            job=await self.backend.dispatch('app.refresh',{'libraryId':entry['id']})
+            task=self.backend.jobs[job['id']]
+            async with asyncio.timeout(5):
+                while self.backend.records('jobs')[0]['stage']!='Signing with your selected identity':
+                    await asyncio.sleep(0.01)
+            self.backend.account={'email':'test@example.invalid','team':{'id':'OTHERTEAM'}}
+        finally:self.backend.account_lock.release()
+        await task
+        latest=self.backend.records('jobs')[0]
+        self.assertEqual(latest['status'],'failed');self.assertIn('developer team',latest['stage'])
+        self.assertEqual(len(self.installed),1);self.assertEqual(self.native_calls,['ipa.sign'])
+
+    async def test_cancel_while_waiting_for_account_does_not_start_the_signer_later(self):
+        await self.backend.account_lock.acquire()
+        try:
+            job=await self.backend.dispatch('install.start',dict(self.params))
+            task=self.backend.jobs[job['id']]
+            async with asyncio.timeout(5):
+                while self.backend.records('jobs')[0]['stage']!='Signing with your selected identity':
+                    await asyncio.sleep(0.01)
+            await self.backend.dispatch('jobs.cancel',{'jobId':job['id']})
+            await asyncio.wait_for(task,2)
+            self.assertEqual(self.backend.records('jobs')[0]['status'],'cancelled')
+            self.assertEqual(self.native_calls,[]);self.assertEqual(self.installed,[])
+        finally:self.backend.account_lock.release()
+        await asyncio.sleep(0)
+        self.assertEqual(self.native_calls,[])
 
     async def test_refresh_uses_the_stored_device_and_cannot_bypass_its_protection(self):
         await self.install();entry=self.backend.records('library')[0];self.protect()

@@ -61,7 +61,15 @@ test('desktop navigation and protected-device controls', {timeout:120000}, async
       ipcMain.handle('waypoint:save',()=>'/synthetic-export.ipa');
       ipcMain.handle('waypoint:call',async(event,method,params)=>{
         global.waypointTestCalls.push({method,params});
-        if(method==='system.status')return {version:'0.1.0',platform:'win32',nativeReady:true,account:global.waypointTestManaged?{email:'test@example.invalid'}:null,settings:{theme:'light',hideSensitive:true}};
+        if(method==='system.status')return {version:'0.1.0',platform:'win32',nativeReady:true,
+          account:global.waypointTestSessionMode==='signedout'?null:global.waypointTestManaged?{email:'test@example.invalid',
+            team:{id:global.waypointTestTeam||'TEAMONE'},teams:[{id:'TEAMONE',name:'First team'},{id:'TEAMTWO',name:'Second team'}]}:null,
+          session:global.waypointTestSessionMode?{saved:global.waypointTestSessionSaved!==false,restored:global.waypointTestSessionMode==='restored',status:global.waypointTestSessionMode==='signedout'?'unavailable':'restored'}:undefined,
+          settings:{theme:'light',hideSensitive:true,rememberSession:true,anisetteUrl:'https://example.invalid'}};
+        if(method==='account.restore'){global.waypointTestSessionMode='restored';return {email:'test@example.invalid'};}
+        if(method==='account.selectTeam'){global.waypointTestTeam=params.teamId;return {email:'test@example.invalid'};}
+        if(method==='account.logout'){global.waypointTestSessionMode='signedout';global.waypointTestSessionSaved=false;return {ok:true};}
+        if(method==='account.login'){global.waypointTestSessionMode='signedin';global.waypointTestSessionSaved=params.rememberSession;return {email:'test@example.invalid'};}
         if(method==='devices.list'){
           if(global.waypointTestManaged)return [{id:'synthetic-phone',name:'Synthetic phone',model:'iPhone17,5',trusted:true,transport:'USB'}];
           throw Error('Synthetic Apple device service unavailable');
@@ -128,6 +136,7 @@ test('desktop navigation and protected-device controls', {timeout:120000}, async
     await dialog.getByLabel('Verification code',{exact:true}).fill('001234');
     await dialog.getByRole('button',{name:'Verify',exact:true}).click();
     await dialog.getByRole('alert').filter({hasText:'Synthetic verification connection failed'}).waitFor();
+    assert.equal((await dialog.getByRole('alert').textContent()).trim(),'Synthetic verification connection failed');
     assert.equal(await dialog.getByLabel('Verification code',{exact:true}).inputValue(),'001234');
     await dialog.getByText('Other verification options',{exact:true}).click();
     await dialog.getByLabel('Trusted phone number',{exact:true}).selectOption('7');
@@ -152,6 +161,26 @@ test('desktop navigation and protected-device controls', {timeout:120000}, async
       {promptId:43,answer:{action:'resend'}},
       {promptId:44,answer:{action:'devices'}},
       {promptId:45,answer:{action:'abort'}}]);
+    await application.evaluate(()=>{global.waypointTestSessionMode='signedout';global.waypointTestSessionSaved=true;});
+    await page.locator('.sidebar').getByRole('button',{name:'Accounts',exact:true}).click();
+    await page.locator('.workspace-header').getByRole('button',{name:'Refresh',exact:true}).click();
+    await page.getByRole('button',{name:'Reconnect saved sign-in',exact:true}).click();
+    await page.getByText('Saved sign-in restored.',{exact:true}).waitFor();
+    await page.getByLabel('Developer team',{exact:true}).selectOption('TEAMTWO');
+    await page.waitForFunction(()=>document.querySelector('#developer-team')?.value==='TEAMTWO');
+    const selected=await application.evaluate(()=>global.waypointTestCalls.find(call=>call.method==='account.selectTeam'));
+    assert.deepEqual(selected.params,{teamId:'TEAMTWO'});
+    await page.getByRole('button',{name:'Sign out',exact:true}).click();
+    await page.getByRole('button',{name:'Sign in to Apple',exact:true}).click();
+    const signin=page.getByRole('dialog');
+    assert.equal(await signin.getByRole('checkbox',{name:'Remember sign-in on this computer',exact:true}).isChecked(),true);
+    await signin.getByRole('checkbox',{name:'Remember sign-in on this computer',exact:true}).uncheck();
+    await signin.getByLabel('Apple account',{exact:true}).fill('fixture@example.invalid');
+    await signin.getByLabel('Password',{exact:true}).fill('fixture-password');
+    await signin.getByRole('button',{name:'Sign in',exact:true}).click();
+    await signin.waitFor({state:'detached'});
+    const accountLogin=await application.evaluate(()=>global.waypointTestCalls.find(call=>call.method==='account.login'));
+    assert.equal(accountLogin.params.rememberSession,false);
   }catch(error){
     {
       const page=application.windows()[0];

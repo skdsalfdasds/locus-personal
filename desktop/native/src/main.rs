@@ -1,8 +1,10 @@
 use std::{collections::HashMap, io::{self, BufRead, Write}, path::{Path, PathBuf}, sync::{Arc, Mutex, atomic::{AtomicU64, Ordering}, mpsc}, time::Duration};
-use apparition_core::api::{self, Session, TwoFactorCallbackResponse};
+use apparition_core::api::{self, TwoFactorCallbackResponse};
+use signing_session::SigningSession as Session;
 use idevice::{IdeviceService, provider::IdeviceProvider, lockdown::LockdownClient, remote_pairing::{RpPairingFile, RemotePairingLockdownService}, usbmuxd::{UsbmuxdAddr, UsbmuxdConnection, Connection}};
 use serde_json::{Value, json};
 mod adhoc;
+mod signing_session;
 
 type Replies = Arc<Mutex<HashMap<u64, mpsc::SyncSender<Value>>>>;
 static NEXT_PROMPT: AtomicU64 = AtomicU64::new(1);
@@ -97,7 +99,7 @@ async fn dispatch(id: &Value, method: &str, p: &Value, data: &Path, session: &mu
             let password=text(p,"password")?.to_owned();
             let anisette=p["anisetteUrl"].as_str().unwrap_or(api::BUILTIN_ANISETTE);
             progress(id,"Contacting Apple to sign in.");
-            let (signed_in,info)=api::sign_in(email,password,anisette,&data.join("signing"),|params| {
+            let signed_in=signing_session::login(email,password,anisette,&data.join("signing"),p["teamId"].as_str(),|params| {
                 let answer=ask(id,replies,"twoFactor",json!({"lastError":params.last_error,"sms":params.sms,"unknown":params.unknown,"selectedNumberId":params.selected_number_id,"numbers":params.numbers}));
                 match answer["action"].as_str(){
                     Some("submit")=>TwoFactorCallbackResponse::SubmitCode(answer["code"].as_str().unwrap_or("").to_string()),
@@ -107,11 +109,17 @@ async fn dispatch(id: &Value, method: &str, p: &Value, data: &Path, session: &mu
                     _=>TwoFactorCallbackResponse::Abort
                 }
             }).await.map_err(|e|format!("{e}"))?;
-            *session=Some(signed_in); Ok(info)
+            let info=signed_in.info();*session=Some(signed_in); Ok(info)
         },
+        "account.exportSession" => session.as_ref().ok_or("Sign in first")?.export().map_err(|e|format!("{e}")),
+        "account.restoreSession" => {
+            let restored=signing_session::restore(p["session"].clone(),&data.join("signing")).await.map_err(|e|format!("{e}"))?;
+            let info=restored.info();*session=Some(restored);Ok(info)
+        },
+        "account.selectTeam" => session.as_mut().ok_or("Sign in first")?.select_team(text(p,"teamId")?).map_err(|e|format!("{e}")),
         "account.logout" => { *session=None; Ok(json!({"ok":true})) },
-        "account.certificates" => api::list_certificates(session.as_mut().ok_or("Sign in first")?).await.map_err(|e|format!("{e}")),
-        "account.appIds" => api::list_app_ids(session.as_mut().ok_or("Sign in first")?).await.map_err(|e|format!("{e}")),
+        "account.certificates" => signing_session::certificates(session.as_mut().ok_or("Sign in first")?).await.map_err(|e|format!("{e}")),
+        "account.appIds" => signing_session::app_ids(session.as_mut().ok_or("Sign in first")?).await.map_err(|e|format!("{e}")),
         "identity.import" => api::import_identity(&data.join("signing"),&std::fs::read(text(p,"path")?).map_err(|e|e.to_string())?,p["password"].as_str().unwrap_or("").into()).map_err(|e|format!("{e}")),
         "profile.import" => api::import_profile(&data.join("signing"),std::fs::read(text(p,"path")?).map_err(|e|e.to_string())?,p["deviceId"].as_str()).map_err(|e|format!("{e}")),
         "ipa.sign" => {
@@ -121,7 +129,7 @@ async fn dispatch(id: &Value, method: &str, p: &Value, data: &Path, session: &mu
             if p["mode"].as_str()==Some("certificate") {
                 api::sign_offline(&data.join("signing"),path,text(p,"identityId")?,p["profileId"].as_str(),udid,strip,None,api::Platform::IOS).map_err(|e|format!("{e}"))
             } else {
-                api::sign_with_apple_id(session.as_mut().ok_or("Sign in first")?,path,udid,p["deviceName"].as_str().unwrap_or("Apple device"),strip).await.map_err(|e|format!("{e}"))
+                signing_session::sign(session.as_mut().ok_or("Sign in first")?,path,udid,p["deviceName"].as_str().unwrap_or("Apple device"),strip).await.map_err(|e|format!("{e}"))
             }
         },
         _ => Err(format!("Unknown native method: {method}"))

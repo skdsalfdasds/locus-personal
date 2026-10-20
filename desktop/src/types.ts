@@ -5,7 +5,8 @@ export interface Job {id:string;name:string;status:'queued'|'running'|'succeeded
 export interface Pairing {id:string;deviceId:string|null;kind:'remote'|'lockdown';path:string;created:string;bindingVerified?:boolean;source?:'created'|'imported';lastValidated?:string}
 export interface VerificationChallenge {promptId:number;kind:'twoFactor';detail?:{lastError?:string|null;sms?:boolean;unknown?:boolean;selectedNumberId?:number|null;numbers?:{id:number;lastTwoDigits:string;numberWithDialCode?:string}[]}}
 export type VerificationReply={action:'submit';code:string}|{action:'sms';numberId:number}|{action:'resend'|'devices'|'abort'};
-export interface Settings {theme:'light'|'dark'|'system';hideSensitive:boolean;autoRefresh:boolean;refreshHours:number;anisetteUrl:string;startAtLogin:boolean}
-export interface Status {version:string;platform:string;architecture:string;nativeReady:boolean;nativePath:string;account:null|{email:string;team:unknown;teams:unknown[]};dataDirectory:string;settings:Settings}
+export interface Settings {theme:'light'|'dark'|'system';hideSensitive:boolean;autoRefresh:boolean;refreshHours:number;anisetteUrl:string;startAtLogin:boolean;rememberSession?:boolean}
+export interface DeveloperTeam {id:string;name?:string|null;kind?:string|null}
+export interface Status {version:string;platform:string;architecture:string;nativeReady:boolean;nativePath:string;account:null|{email:string;team:DeveloperTeam|null;teams:DeveloperTeam[]};session?:{saved:boolean;restored:boolean;status:string;message?:string};dataDirectory:string;settings:Settings}
 export interface Bridge {call<T=unknown>(method:string,params?:Record<string,unknown>):Promise<T>;chooseFile(kind:string):Promise<string|null>;saveFile(name:string):Promise<string|null>;pathForFile(file:File):string;reveal(path:string):Promise<void>;openExternal(url:string):Promise<void>;onEvent(listener:(event:any)=>void):()=>void;platform:string}
 declare global {interface Window {waypoint?:Bridge}}

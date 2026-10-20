@@ -15,6 +15,7 @@ export default function Setup({device,status,jobs,onJob,onError,onActivity}:Prop
   const [checkError,setCheckError]=useState('');
   const [email,setEmail]=useState('');
   const [password,setPassword]=useState('');
+  const [rememberSession,setRememberSession]=useState(true);
   const [path,setPath]=useState('');
   const [advanced,setAdvanced]=useState(false);
   const [endpoint,setEndpoint]=useState<string|null>(null);
@@ -26,8 +27,9 @@ export default function Setup({device,status,jobs,onJob,onError,onActivity}:Prop
   const service=endpoint??status?.settings.anisetteUrl??'';
   const accountReady=!!status?.account;
   const ready=!!device?.trusted&&preflight?.developerMode===true&&!protectedDevice&&!preflight?.waypointInstalled;
-  const canInstall=!!(ready&&!running&&status?.nativeReady&&(path||preflight?.bundledPackage)&&(accountReady||status?.platform!=='win32'||service));
+  const canInstall=!!(ready&&!running&&status?.nativeReady&&status.session?.status!=='restoring'&&(path||preflight?.bundledPackage)&&(accountReady||status?.platform!=='win32'||service));
   const deviceId=device?.id;
+  useEffect(()=>{if(typeof status?.settings.rememberSession==='boolean')setRememberSession(status.settings.rememberSession);},[status?.settings.rememberSession]);
   useEffect(()=>{
     let current=true;
     setPreflight(null);setCheckError('');
@@ -45,7 +47,7 @@ export default function Setup({device,status,jobs,onJob,onError,onActivity}:Prop
     if(!window.waypoint||!device||!canInstall)return;
     setSubmitting(true);const secret=password;setPassword('');
     try{
-      const job=await window.waypoint.call<Job>('setup.start',{deviceId:device.id,email,password:secret,path:path||preflight?.bundledPackage||undefined,anisetteUrl:service||undefined});
+      const job=await window.waypoint.call<Job>('setup.start',{deviceId:device.id,email,password:secret,rememberSession,path:path||preflight?.bundledPackage||undefined,anisetteUrl:service||undefined});
       setJobId(job.id);onJob(job);
     }catch(e){onError((e as Error).message);}
     finally{setSubmitting(false);}
@@ -91,6 +93,7 @@ export default function Setup({device,status,jobs,onJob,onError,onActivity}:Prop
           {accountReady?<p className="account-connected">Your Apple account is connected.</p>:<>
             <label>Email address<input type="email" autoComplete="username" required value={email} disabled={!!running||protectedDevice} onChange={e=>setEmail(e.target.value)} placeholder="you@icloud.com"/></label>
             <label>Password<input type="password" autoComplete="current-password" required value={password} disabled={!!running||protectedDevice} onChange={e=>setPassword(e.target.value)}/></label>
+            <label className="checkbox"><input type="checkbox" checked={rememberSession} disabled={!!running||protectedDevice} onChange={e=>setRememberSession(e.target.checked)}/>Remember sign-in on this computer</label>
             <p className="fine-print">Apple may ask for a verification code. Your password is not saved.</p>
           </>}
           <div className="collapsible">

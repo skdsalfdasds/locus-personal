@@ -33,7 +33,7 @@ def cleanup_extraction(candidate):
     shutil.rmtree(resolved)
 
 
-async def remember_install(backend,device_id,metadata,source,params):
+async def remember_install(backend,device_id,metadata,source,params,signing_account=None):
     from backend.server import clean_error
     matching=[entry for entry in backend.records('library')
               if str(entry.get('deviceId','')).casefold()==device_id.casefold()
@@ -45,7 +45,10 @@ async def remember_install(backend,device_id,metadata,source,params):
     for key in ('identityId','profileId'):
         entry.pop(key,None)
         if params.get(key):entry[key]=params[key]
-    entry['accountEmail']=(backend.account or {}).get('email') if entry['signingMode']=='appleId' else None
+    account=signing_account if signing_account is not None else {
+        'email':(backend.account or {}).get('email'),'teamId':((backend.account or {}).get('team') or {}).get('id')}
+    entry['accountEmail']=account.get('email') if entry['signingMode']=='appleId' else None
+    entry['accountTeamId']=account.get('teamId') if entry['signingMode']=='appleId' else None
     try:
         entry['sourcePath'],entry['sourceSha256']=await asyncio.to_thread(cache_source,backend.root,source)
         entry.pop('sourceError',None)
@@ -64,10 +67,14 @@ async def settle_signing(backend,params):
     # Cancelling the UI job must not remove files while the signer still owns
     # them. Finish this local operation, then propagate cancellation before any
     # installation. Repeated cancellation requests are coalesced by Backend.
-    signing=asyncio.create_task(backend.native_call('ipa.sign',params))
+    started=asyncio.Event()
+    signing=asyncio.create_task(backend.sign_ipa(params,on_started=started.set))
     try:return await asyncio.shield(signing)
     except asyncio.CancelledError:
-        with contextlib.suppress(Exception):await signing
+        if not started.is_set():signing.cancel()
+        # A task still waiting for the account lock never owned the signer.
+        # Only an operation already underway needs to settle before cleanup.
+        with contextlib.suppress(asyncio.CancelledError,Exception):await signing
         raise
 
 
@@ -93,7 +100,7 @@ async def run(backend,job,params):
                     backend.update_job(job,'Preparing app')
                     source=Path(workspace)/(str(uuid.uuid4())+'.ipa')
                     await asyncio.to_thread(prepare_ipa,str(original),str(source),options)
-                path=source
+                path=source;signing_account=None
                 if params.get('mode','appleId')!='existing':
                     cache=extraction_cache(source.name)
                     if cache.exists():raise RuntimeError('A signing workspace already exists. Retry with a new workspace.')
@@ -102,6 +109,7 @@ async def run(backend,job,params):
                     backend.update_job(job,'Signing with your selected identity')
                     signed=await settle_signing(backend,{**params,'path':str(source)})
                     path=Path(signed['signedPath'])
+                    signing_account=signed.get('signingAccount')
                 metadata=await asyncio.to_thread(installation_metadata,path)
                 backend.require_device_writes(device_id)
                 backend.update_job(job,'Uploading and installing')
@@ -112,7 +120,7 @@ async def run(backend,job,params):
                         backend.require_device_writes(device_id)
                         await service.install_from_local(path,handler=lambda percent,*_:backend.update_job(job,'Installing app',progress=percent))
                 job['result']={'installed':True,'bundleId':metadata['bundleId']}
-                entry=await remember_install(backend,device_id,metadata,source,params)
+                entry=await remember_install(backend,device_id,metadata,source,params,signing_account)
                 job['result']['libraryId']=entry['id']
                 job['result']['refreshSourceSaved']=bool(entry.get('sourcePath'))
                 stage='Installed successfully' if entry.get('sourcePath') else 'Installed; refresh source could not be saved'

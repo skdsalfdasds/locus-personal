@@ -88,3 +88,19 @@ class PromptDispatchTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.backend.account)
         self.assertEqual(self.backend.native_prompts,{})
         self.assertEqual(self.events,[{'event':'promptClosed','promptId':7}])
+
+    async def test_stale_reader_cannot_clear_replacement_account_or_prompt(self):
+        stream=asyncio.StreamReader()
+        stream.feed_data((json.dumps({'id':'new-request','result':{'unexpected':True}})+'\n').encode())
+        stream.feed_eof()
+        old=SimpleNamespace(stdout=stream)
+        replacement=SimpleNamespace(stdout=asyncio.StreamReader())
+        self.backend.account={'email':'new@example.invalid'}
+        self.backend.native_prompts[7]=challenge()
+        future=asyncio.get_running_loop().create_future();self.backend.native_pending['new-request']=future
+        try:
+            with patch.object(self.backend,'native',replacement):await self.backend.read_native(old)
+            self.assertEqual(self.backend.account,{'email':'new@example.invalid'})
+            self.assertIn(7,self.backend.native_prompts);self.assertFalse(future.done())
+            self.assertEqual(self.events,[])
+        finally:future.cancel();self.backend.native_pending.clear()

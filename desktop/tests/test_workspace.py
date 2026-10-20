@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import AsyncMock
 
@@ -56,7 +57,17 @@ with WorkspaceLease(sys.argv[1]):
                     with WorkspaceLease(root):pass
                 child.kill()
                 child.wait(timeout=10)
-                with WorkspaceLease(root):pass
+                # Windows can report process exit just before kernel handle
+                # cleanup releases its byte-range locks. Verify eventual release
+                # rather than assuming both notifications are synchronous.
+                deadline=time.monotonic()+2
+                while True:
+                    try:
+                        with WorkspaceLease(root):pass
+                        break
+                    except RuntimeError:
+                        if time.monotonic()>=deadline:raise
+                        time.sleep(0.01)
                 self.assertTrue((Path(root)/'workspace.lock').is_file())
             finally:
                 if child.poll() is None:child.kill()

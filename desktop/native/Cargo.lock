@@ -5434,12 +5434,19 @@ version = "0.1.0"
 dependencies = [
  "apparition-core",
  "apple-codesign",
+ "base64 0.22.1",
  "idevice",
+ "isideload",
  "plist",
+ "rootcause",
+ "rsa",
+ "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "tokio",
  "walkdir",
+ "x509-cert 0.2.5",
  "zip 8.6.0",
 ]
 

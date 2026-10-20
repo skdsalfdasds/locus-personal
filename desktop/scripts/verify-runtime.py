@@ -35,12 +35,18 @@ async def main():
                 'id':'synthetic-interrupted','status':'running','logs':[],
                 'progress':40,'result':{'installed':True}})))
             previous.commit()
-        ping = subprocess.run([str(engine)], input='{"id":"ping","method":"ping","params":{}}\n{"id":"validation-api","method":"pairing.validate","params":{}}\n',
+        requests=[{'id':identifier,'method':method,'params':params} for identifier,method,params in (
+            ('ping','ping',{}),('validation-api','pairing.validate',{}),
+            ('session-export','account.exportSession',{}),
+            ('session-restore','account.restoreSession',{'session':{'version':1}}))]
+        ping = subprocess.run([str(engine)], input=''.join(json.dumps(request)+'\n' for request in requests),
                               capture_output=True, text=True, env=env, timeout=30, check=True)
         replies = {message['id']:message for line in ping.stdout.splitlines() if line.startswith('{')
                    for message in [json.loads(line)]}
         assert replies['ping']['result']['engine'] == 'waypoint-native'
         assert replies['validation-api']['error']['message'] == 'Missing deviceId'
+        assert replies['session-export']['error']['message']=='Sign in first'
+        assert 'Saved signing session is invalid' in replies['session-restore']['error']['message']
         service = await asyncio.create_subprocess_exec(str(backend),
             stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL, env=env)
@@ -53,6 +59,10 @@ async def main():
         try:
             status = await call('system.status')
             assert status['result']['nativeReady']
+            restored=await call('account.restore')
+            assert restored['result'] is None
+            private=await call('account.exportSession')
+            assert private['error']['type']=='ValueError'
             expired=await call('prompt.reply',{'promptId':123,'answer':{'action':'abort'}})
             assert expired['error']['type']=='ValueError'
             assert 'has ended' in expired['error']['message']

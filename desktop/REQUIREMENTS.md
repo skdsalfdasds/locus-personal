@@ -25,7 +25,7 @@ Statuses below distinguish implemented code from verification on a physical devi
 | File sharing, device metadata restrictions | Implemented; source binary preserved; device behavior unverified |
 | Remove selected/all plugins | Implemented; package tests pass |
 | Edit Info.plist | Implemented; protected identity/executable keys enforced |
-| Free/paid Apple signing | Native engine integrated; live accounts, team selection, limits UI outstanding |
+| Free/paid Apple signing | Native engine integrated; developer-team selection and identity-preserving refresh guards implemented. Live account signing and full account-limit management UI remain outstanding |
 | Certificate/profile signing | Native engine integrated; live signing/installation verification outstanding |
 | Normal install of already-signed IPA | Implemented; rejects unsigned customization in this mode |
 | Modified unsigned IPA export | Implemented and tested |
@@ -33,10 +33,10 @@ Statuses below distinguish implemented code from verification on a physical devi
 | Custom entitlements | Main executable supported for ad-hoc export, including verified entitlement seal; Apple-account/certificate customization remains outstanding |
 | Multiple dylib/framework/bundle/deb injections | Outstanding |
 | Substrate/Substitute support | Outstanding |
-| Keep signing sessions across restart | Outstanding; password is not saved |
+| Keep signing sessions across restart | Implemented password-free native token restoration, encrypted local cache with key in a system credential store, asynchronous startup, reconnect and sign-out. Native/Python mocked lifecycle tests pass; real Apple restoration and actual OS-vault interaction remain unverified |
 | Account and certificate management | Read-only listing integrated; explicit revoke/delete UI outstanding |
 | Automatic app refresh daemon and Wi-Fi renewal | Outstanding |
-| Refresh expiry detection and recovery | Installs save actual signed identity, private refresh input and earliest readable embedded-profile expiry. Manual Apple-account refresh implemented with original-account/source-integrity checks. Interrupted operations preserve their recorded outcome and are never automatically retried; OS workspace lease and desktop single-instance guard prevent competing services. Automatic scheduling/session restoration and physical renewal remain outstanding |
+| Refresh expiry detection and recovery | Installs save actual signed identity, signing-account/team snapshot, private refresh input and earliest readable profile expiry. Manual refresh checks original identity/source integrity, including after waiting for the signing lock. Interrupted operations retain known outcomes and never auto-retry. Automatic scheduling and physical renewal remain outstanding |
 | JIT for eligible iOS versions | Outstanding |
 | Apple TV and Apple Silicon Mac installation | Outstanding |
 | Install progress and logs | Implemented; real signing stage refinement and system log viewer outstanding |
@@ -49,9 +49,9 @@ Statuses below distinguish implemented code from verification on a physical devi
 | mDNS discovery, Apple TV PIN, iOS 27 host PIN | Outstanding |
 | Wireless debugging control | Implemented behind protection guard; not invoked on protected phone |
 | Windows one-click desktop installer | Packaged preview built and launched; frozen runtime, pairing import and write protection verified |
-| macOS and Linux installers | All four targets passed build/runtime/UI/packaging and assembled-app checks in run 39360546983. Workspace recovery, process lease and single-instance follow-up also passed every target in run 39362574205. New verification controls need their next packaged run |
+| macOS and Linux installers | All four targets passed through actual assembled-app checks in runs 39360546983, 39362574205 and 39364465591 (including verification controls). New session persistence/team-selection revision needs its next packaged run |
 | License/source distribution completeness | Core notices prepared; full bundled dependency/source inventory outstanding before public release |
-| Rich speed location interface investigation | Corrected live simulator probe 39362218294 passed: independent simctl control succeeded, then daemon samples delivered 0 -> 30 -> 0 m/s with speed accuracy 0.100/course 90. Shared Waypoint client and isolated XCTest server compiled and delivered moving/stationary samples over loopback in 39363428291; rejection/disconnect status checks failed because the label was absent from the accessibility tree. Persistent status UI and sample-boundary checks prepared for the next run. Production activation, physical delivery and lifecycle remain unverified. No physical probe has run |
+| Rich speed location interface investigation | Simulator run 39365186326 passed direct daemon and app-to-runner socket delivery, speed/course/accuracy, invalid-credential rejection, held coordinate after socket-server stop and field/freshness boundary checks. The exact shared client source compiles into Waypoint but is not enabled in its production flow. Production activation, physical delivery, runner lifecycle and Life360 classification remain unverified. No physical probe has run |
 | Life360 recognizes simulated driving activity | Unverified. No supported Core Motion automotive setter identified; coordinate speed alone does not prove drive recognition |
 
 ## Protected-phone constraint
@@ -69,6 +69,6 @@ location setting or installed Waypoint app may be altered.
 - Desktop platform build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39341388486
 - Current simulator launch-order experiment: https://github.com/skdsalfdasds/locus-personal/actions/runs/39348961613
 - Revised cross-platform build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39347865988
-- 85 backend tests and desktop navigation/offline-export/manual-refresh/interruption/SMS verification checks pass locally. Native validation
+- Backend tests and desktop navigation/offline-export/manual-refresh/interruption/SMS/session controls pass locally. Native validation
   compiles in release mode. Frozen Windows backend import and protection checks
   use synthetic records and never open a phone service.

@@ -34,6 +34,18 @@ trusted-device delivery, and text messages to a trusted number Apple supplied.
 The interface shows only the last two digits of those numbers. Replies are
 validated against the active, single-use native challenge; codes stay in memory.
 
+Remember sign-in keeps a password-free developer token in an AES-GCM encrypted
+cache. Its random encryption key lives in Windows Credential Manager, macOS
+Keychain or a supported Linux system keyring; there is no plaintext fallback.
+Saved sessions restore asynchronously on launch and can be reconnected from
+Accounts. Network failures preserve the encrypted cache. Sign-out disables
+automatic restoration before clearing the cache and its key.
+
+Accounts can select among the developer teams returned by Apple. Signing and
+account changes are serialized; each managed install records the account and
+team that actually signed it. A refresh refuses to switch that identity silently.
+Real Apple login/restoration and physical installation remain unverified.
+
 ## Active phone protection
 
 This laptop has a local policy protecting the user's existing active Waypoint
@@ -77,8 +89,8 @@ Sideload instead of promising to extend a fixed profile's expiration.
 
 Refresh sources and signing workspaces stay on this computer. Cancellation waits
 for an in-progress signer before removing its inputs, and never proceeds to
-installation after cancellation. Automatic refresh and session restoration across
-restart are still in development.
+installation after cancellation. Password-free session restoration is implemented;
+automatic refresh scheduling remains in development.
 
 Only one desktop instance and one device service can own a workspace. After a
 service crash, unfinished operations are shown as Interrupted with their recorded
