@@ -54,16 +54,23 @@ test('desktop navigation and protected-device controls', {timeout:60000}, async 
     // All IPC below is synthetic; no file chooser or phone operation is invoked.
     await application.evaluate(({ipcMain})=>{
       global.waypointTestCalls=[];
+      global.waypointTestManaged=false;
       for(const channel of ['waypoint:call','waypoint:choose','waypoint:save'])ipcMain.removeHandler(channel);
       ipcMain.handle('waypoint:choose',()=>'/synthetic.ipa');
       ipcMain.handle('waypoint:save',()=>'/synthetic-export.ipa');
       ipcMain.handle('waypoint:call',async(_,method,params)=>{
         global.waypointTestCalls.push({method,params});
-        if(method==='system.status')return {version:'0.1.0',platform:'win32',nativeReady:true,account:null,settings:{theme:'light',hideSensitive:true}};
-        if(method==='devices.list')throw Error('Synthetic Apple device service unavailable');
+        if(method==='system.status')return {version:'0.1.0',platform:'win32',nativeReady:true,account:global.waypointTestManaged?{email:'test@example.invalid'}:null,settings:{theme:'light',hideSensitive:true}};
+        if(method==='devices.list'){
+          if(global.waypointTestManaged)return [{id:'synthetic-phone',name:'Synthetic phone',model:'iPhone17,5',trusted:true,transport:'USB'}];
+          throw Error('Synthetic Apple device service unavailable');
+        }
+        if(method==='setup.check')return {trusted:true,developerMode:true,localDevVPNInstalled:true,waypointInstalled:true};
+        if(method==='apps.list'&&global.waypointTestManaged)return [{bundleId:'org.example.synthetic.TESTTEAM',name:'Synthetic app',version:'1.0',managed:true,managedId:'synthetic-managed-app',refreshable:true,sourceAvailable:true,expires:'2030-01-02T00:00:00+00:00',fileSharing:true}];
         if(['jobs.list','pairings.list','apps.list'].includes(method))return [];
         if(method==='ipa.inspect')return {path:'/synthetic.ipa',filename:'synthetic.ipa',name:'Synthetic app',version:'1.0',size:1024,extensions:[],bundleId:'org.example.synthetic'};
         if(method==='ipa.exportSigned')return {signatureMode:'adhoc',appleProvisioned:false};
+        if(method==='app.refresh')return {id:'synthetic-refresh',name:'Refresh synthetic app',status:'queued',stage:'Waiting',started:new Date().toISOString(),progress:null,logs:[],deviceId:'synthetic-phone'};
         throw Error('Unexpected preview operation: '+method);
       });
     });
@@ -79,6 +86,16 @@ test('desktop navigation and protected-device controls', {timeout:60000}, async 
     const calls=await application.evaluate(()=>global.waypointTestCalls);
     assert.ok(!calls.some(call=>call.method==='install.start'||call.method==='setup.start'));
     assert.deepEqual(calls.find(call=>call.method==='ipa.exportSigned').params.entitlements,{'get-task-allow':true});
+    await application.evaluate(()=>{global.waypointTestManaged=true;});
+    await page.reload();
+    await page.waitForFunction(()=>document.querySelector('.statusbar')?.textContent.includes('Device service online'));
+    await page.locator('.sidebar').getByRole('button',{name:'Applications',exact:true}).click();
+    await page.getByRole('table').getByText('Synthetic app',{exact:true}).waitFor();
+    assert.equal(await page.locator('time[datetime="2030-01-02T00:00:00+00:00"]').count(),1);
+    await page.getByRole('table').getByRole('button',{name:'Refresh',exact:true}).click();
+    await page.getByRole('heading',{name:'Activity',exact:true,level:1}).waitFor();
+    const refreshed=await application.evaluate(()=>global.waypointTestCalls.find(call=>call.method==='app.refresh'));
+    assert.deepEqual(refreshed.params,{libraryId:'synthetic-managed-app'});
   }catch(error){
     if(process.env.CI){
       const page=application.windows()[0];

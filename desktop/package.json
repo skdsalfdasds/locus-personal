@@ -16,7 +16,8 @@
     "build:runtime": "python scripts/build-runtime.py",
     "package:win": "npm run build && electron-builder --win nsis --x64",
     "package:mac": "npm run build && electron-builder --mac dmg",
-    "package:linux": "npm run build && electron-builder --linux AppImage deb --x64"
+    "package:linux": "npm run build && electron-builder --linux AppImage deb --x64",
+    "test:packaged": "node --test tests/packaged.spec.cjs"
   },
   "dependencies": {
     "react": "^19.0.0",

@@ -10,7 +10,7 @@ let mainWindow, backend, quitting = false;
 const pending = new Map();
 const pairingMethods=['pairing.inspect','pairing.import','pairing.validate','pairing.destinations'];
 const root = path.join(__dirname, '..');
-const allowed = new Set(['system.status','settings.get','settings.save','devices.list','apps.list','library.list','jobs.list','jobs.cancel','ipa.inspect','ipa.prepare','ipa.exportSigned','ipa.sign','install.start','pairings.list','pairing.createLockdown','pairing.createRemote','pairing.export','pairing.install','device.enableWireless','account.login','account.logout','account.certificates','account.appIds','identity.import','profile.import','prompt.reply','app.uninstall','setup.check','setup.start']);
+const allowed = new Set(['system.status','settings.get','settings.save','devices.list','apps.list','library.list','jobs.list','jobs.cancel','ipa.inspect','ipa.prepare','ipa.exportSigned','ipa.sign','install.start','pairings.list','pairing.createLockdown','pairing.createRemote','pairing.export','pairing.install','device.enableWireless','account.login','account.logout','account.certificates','account.appIds','identity.import','profile.import','prompt.reply','app.uninstall','app.refresh','setup.check','setup.start']);
 for(const method of pairingMethods)allowed.add(method);
 function startBackend() {
   const packaged = path.join(process.resourcesPath, 'runtime', 'waypoint-backend', process.platform === 'win32' ? 'waypoint-backend.exe' : 'waypoint-backend');

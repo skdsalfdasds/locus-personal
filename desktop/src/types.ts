@@ -1,6 +1,6 @@
 export interface Device { id:string; name:string; model?:string; osVersion?:string; transport:string; trusted:boolean; developerMode?:boolean; wirelessDebugging?:boolean; issue?:string; protected?:boolean }
-export interface App { bundleId:string; name:string; version:string; fileSharing:boolean; managed:boolean; expires?:string; deviceId:string }
-export interface Package { path:string;filename:string;name:string;bundleId:string;version:string;build:string;minimumOS:string;size:number;unpackedSize:number;extensions:{path:string;name:string;bundleId:string}[];icon?:string;signed:boolean;sha256:string }
+export interface App { bundleId:string; name:string; version:string; fileSharing:boolean; managed:boolean; expires?:string|null; managedId?:string; refreshable?:boolean; sourceAvailable?:boolean; deviceId:string }
+export interface Package { path:string;filename:string;name:string;bundleId:string;version:string;build:string;minimumOS:string;size:number;unpackedSize:number;extensions:{path:string;name:string;bundleId:string}[];icon?:string;signed:boolean;sha256:string;expires?:string }
 export interface Job {id:string;name:string;status:'queued'|'running'|'succeeded'|'failed'|'cancelled';stage:string;progress:number|null;started:string;deviceId?:string;logs:{time:string;message:string}[]}
 export interface Pairing {id:string;deviceId:string|null;kind:'remote'|'lockdown';path:string;created:string;bindingVerified?:boolean;source?:'created'|'imported';lastValidated?:string}
 export interface Settings {theme:'light'|'dark'|'system';hideSensitive:boolean;autoRefresh:boolean;refreshHours:number;anisetteUrl:string;startAtLogin:boolean}

@@ -17,6 +17,7 @@ Main components:
 | LIEF | Apache-2.0 | https://github.com/lief-project/LIEF |
 | Pillow | MIT-CMU | https://github.com/python-pillow/Pillow |
 | cryptography | Apache-2.0 OR BSD-3-Clause | https://github.com/pyca/cryptography |
+| asn1crypto 1.5.1 | MIT | https://github.com/wbond/asn1crypto |
 | keyring | MIT | https://github.com/jaraco/keyring |
 | PyInstaller build tooling | GPL with the PyInstaller bootloader exception | https://github.com/pyinstaller/pyinstaller |
 

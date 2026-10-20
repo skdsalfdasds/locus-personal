@@ -90,12 +90,13 @@ export default function App(){
     }catch(e){setError((e as Error).message);}
   },[call]);
   useEffect(()=>{refresh();const timer=setInterval(refresh,10000);return()=>clearInterval(timer);},[refresh]);
+  const completedOperations=jobs.filter(job=>job.deviceId===device?.id&&job.status==='succeeded').length;
   useEffect(()=>{
     if(!device){setApps([]);return;}
     let current=true;
     call<InstalledApp[]>('apps.list',{deviceId:device.id}).then(data=>{if(current)setApps(data);}).catch(e=>setError(e.message));
     return()=>{current=false;};
-  },[device?.id,call]);
+  },[device?.id,completedOperations,call]);
   useEffect(()=>window.waypoint?.onEvent(event=>{
     if(event.event==='job')addJob(event.job);
     if(event.event==='prompt'){setPrompt(event);setCode('');}
@@ -221,7 +222,7 @@ export default function App(){
           <p className="fine-print">{mode==='adhoc'?'Ad-hoc signatures contain no Apple provisioning. This export cannot be installed on a standard iPhone.':mode==='export'?'Exports an unsigned copy. The original file is preserved.':'A free developer profile typically needs renewal every seven days. Apple account limits apply.'}</p>
         </aside></div>}
         {page==='applications'&&<section><div className="list-toolbar"><span>{apps.length} applications</span><input aria-label="Search installed apps" placeholder="Filter applications" value={search} onChange={e=>setSearch(e.target.value)}/></div>
-          {apps.length?<div className="table-scroll"><table><thead><tr><th>Application</th><th>Version</th><th>Managed by</th><th>File sharing</th><th/></tr></thead><tbody>{filteredApps.map(app=><tr key={app.bundleId}><td><strong>{app.name}</strong>{!hidden&&<small className="mono">{app.bundleId}</small>}</td><td>{app.version||'—'}</td><td>{app.managed?'Waypoint':'—'}</td><td>{app.fileSharing?'Available':'—'}</td><td><button className="text-button danger" disabled={blocked} onClick={()=>setDeleteApp(app)}>Uninstall</button></td></tr>)}</tbody></table>{filteredApps.length===0&&<Empty title="No matching applications"/>}</div>:<Empty title="No applications to show">Connect a trusted device to view its apps.</Empty>}
+          {apps.length?<div className="table-scroll"><table><thead><tr><th>Application</th><th>Version</th><th>Managed by</th><th>Profile expires</th><th>File sharing</th><th/></tr></thead><tbody>{filteredApps.map(app=><tr key={app.bundleId}><td><strong>{app.name}</strong>{!hidden&&<small className="mono">{app.bundleId}</small>}</td><td>{app.version||'—'}</td><td>{app.managed?'Waypoint':'—'}</td><td>{app.expires?<time dateTime={app.expires}>{new Date(app.expires).toLocaleDateString()}</time>:app.managed?'Unknown':'—'}</td><td>{app.fileSharing?'Available':'—'}</td><td><div className="row-actions">{app.managedId&&app.refreshable&&<button className="text-button" disabled={blocked||!!busy||!app.sourceAvailable} onClick={()=>{if(!status?.account){setLogin(true);return;}perform('refreshApp',async()=>{const job=await call<Job>('app.refresh',{libraryId:app.managedId});addJob(job);setPage('activity');});}}>Refresh</button>}<button className="text-button danger" disabled={blocked} onClick={()=>setDeleteApp(app)}>Uninstall</button></div></td></tr>)}</tbody></table>{filteredApps.length===0&&<Empty title="No matching applications"/>}</div>:<Empty title="No applications to show">Connect a trusted device to view its apps.</Empty>}
         </section>}
         {page==='pairing'&&<div className="split-layout"><section className="content-column"><h2>Create a pairing record</h2><p className="section-description">Choose the format required by the app you’re pairing.</p>
           <div className="segmented">{(['remote','lockdown'] as const).map(kind=><button className={pairKind===kind?'selected':''} key={kind} onClick={()=>setPairKind(kind)}>{kind==='remote'?'Remote pairing':'Lockdown'}</button>)}</div>

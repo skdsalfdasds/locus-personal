@@ -36,7 +36,7 @@ Statuses below distinguish implemented code from verification on a physical devi
 | Keep signing sessions across restart | Outstanding; password is not saved |
 | Account and certificate management | Read-only listing integrated; explicit revoke/delete UI outstanding |
 | Automatic app refresh daemon and Wi-Fi renewal | Outstanding |
-| Refresh expiry detection and recovery | Managed library started; full renewal and expiry handling outstanding |
+| Refresh expiry detection and recovery | Installs save actual signed identity, private refresh input and earliest readable embedded-profile expiry. Manual Apple-account refresh implemented with original-account/source-integrity checks; 70 backend tests and synthetic UI flow pass. Automatic scheduling/session restoration and physical renewal remain outstanding |
 | JIT for eligible iOS versions | Outstanding |
 | Apple TV and Apple Silicon Mac installation | Outstanding |
 | Install progress and logs | Implemented; real signing stage refinement and system log viewer outstanding |
@@ -49,9 +49,9 @@ Statuses below distinguish implemented code from verification on a physical devi
 | mDNS discovery, Apple TV PIN, iOS 27 host PIN | Outstanding |
 | Wireless debugging control | Implemented behind protection guard; not invoked on protected phone |
 | Windows one-click desktop installer | Packaged preview built and launched; frozen runtime, pairing import and write protection verified |
-| macOS and Linux installers | Linux x64 native compilation, UI tests, frozen runtime/offline-signing checks, AppImage and Debian packaging passed in run 39347865988. Both Mac builds remain in progress. Earlier Mac UI jobs timed out; bounded startup/cleanup diagnostics added |
+| macOS and Linux installers | All four targets passed build, native/runtime checks, development UI tests and installer packaging in run 39347865988. Post-package launch/export tests added for the next revision; final assembled Mac/Linux application execution still needs that evidence |
 | License/source distribution completeness | Core notices prepared; full bundled dependency/source inventory outstanding before public release |
-| Rich speed location interface investigation | Simulator baseline succeeds after independent seeding; XCTest proxy leaves both coordinate and speed unchanged. This does not isolate speed delivery. Default target initialization plus a coordinate delivery gate added and running; never run on protected phone |
+| Rich speed location interface investigation | Public XCTest proxy delivered speed 30.000 m/s, accuracy 0.100 and course 90 at launch in run 39349859427; live updates were ignored. Separate XCTRunnerDaemonSession live transport probe is running in 39359333989. No physical probe has run |
 | Life360 recognizes simulated driving activity | Unverified. No supported Core Motion automotive setter identified; coordinate speed alone does not prove drive recognition |
 
 ## Protected-phone constraint
@@ -69,6 +69,6 @@ location setting or installed Waypoint app may be altered.
 - Desktop platform build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39341388486
 - Current simulator launch-order experiment: https://github.com/skdsalfdasds/locus-personal/actions/runs/39348961613
 - Revised cross-platform build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39347865988
-- 51 backend tests and desktop navigation/offline-export checks pass locally. Native validation
+- 70 backend tests and desktop navigation/offline-export/manual-refresh checks pass locally. Native validation
   compiles in release mode. Frozen Windows backend import and protection checks
   use synthetic records and never open a phone service.

@@ -55,6 +55,26 @@ entitlements for those Apple-provisioned modes remain in development.
 The offline verification fixture in scripts/verify-adhoc.py independently checks
 the code-page and entitlement digests and rejects modified executable data.
 
+## Managed installations and manual refresh
+
+Successful sideloads are recorded with the signed bundle identifier and a private
+copy of the input used for signing. Customizations are applied once before that
+copy is saved, so a later refresh does not depend on the original download or
+rename the app again. Embedded profile metadata supplies the expiration date;
+unknown or malformed metadata is shown as unknown. Reading metadata does not
+verify an Apple signature.
+
+For Apple-account installs, Applications exposes Refresh while the same Apple
+account is connected. The backend uses the stored device association, checks
+source integrity, and rechecks protection before installation. Existing-signed
+and certificate installs require their appropriate new signing material through
+Sideload instead of promising to extend a fixed profile's expiration.
+
+Refresh sources and signing workspaces stay on this computer. Cancellation waits
+for an in-progress signer before removing its inputs, and never proceeds to
+installation after cancellation. Automatic refresh and session restoration across
+restart are still in development.
+
 ## Development
 
 Requirements: Node.js, Python 3.13, Rust, and the platform's native C/C++ build tools.

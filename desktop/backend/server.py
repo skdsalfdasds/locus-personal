@@ -14,6 +14,8 @@ import uuid
 
 from backend.packages import inspect_ipa, prepare_ipa, pack_signed_bundle
 
+NATIVE_TIMEOUT_SECONDS=900
+
 def now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -78,7 +80,7 @@ class Backend:
     async def close(self):
         tasks = list(self.jobs.values())
         for task in tasks:
-            task.cancel()
+            if not task.cancelling():task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         if self.native and self.native.returncode is None:
             self.native.stdin.close()
@@ -159,7 +161,20 @@ class Backend:
         self.native.stdin.write((json.dumps({'id': identifier, 'method': method, 'params': params})+'\n').encode())
         await self.native.stdin.drain()
         try:
-            return await asyncio.wait_for(future, 900)
+            return await asyncio.wait_for(future, NATIVE_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError:
+            # A signer that exceeded its deadline must stop before its caller
+            # cleans up input files. Its in-memory Apple session is no longer live.
+            async with self.native_start_lock:
+                process=self.native
+                if process and process.returncode is None:
+                    process.terminate()
+                    try:await asyncio.wait_for(process.wait(),3)
+                    except asyncio.TimeoutError:
+                        process.kill();await process.wait()
+                await asyncio.gather(*list(self.native_tasks),return_exceptions=True)
+                self.account=None
+            raise RuntimeError('The native signing operation timed out. Sign in again before retrying.') from None
         finally:
             self.native_pending.pop(identifier, None)
 
@@ -194,10 +209,13 @@ class Backend:
         async with self.device(device_id) as device:
             async with InstallationProxyService(device) as service:
                 apps = await service.get_apps(application_type='User')
-        managed = {item.get('bundleId'): item for item in self.records('library') if item.get('deviceId') == device_id}
+        managed = {}
+        for item in self.records('library'):
+            if str(item.get('deviceId','')).casefold()==device_id.casefold():
+                managed.setdefault(item.get('bundleId'),item)
         result = []
         for bundle, info in apps.items():
-            result.append({'bundleId':bundle,'name':info.get('CFBundleDisplayName',info.get('CFBundleName',bundle)), 'version':info.get('CFBundleShortVersionString',''), 'fileSharing': bool(info.get('UIFileSharingEnabled')), 'managed': bundle in managed, 'expires':managed.get(bundle,{}).get('expires'), 'deviceId':device_id})
+            result.append({'bundleId':bundle,'name':info.get('CFBundleDisplayName',info.get('CFBundleName',bundle)), 'version':info.get('CFBundleShortVersionString',''), 'fileSharing': bool(info.get('UIFileSharingEnabled')), 'managed': bundle in managed, 'expires':managed.get(bundle,{}).get('expires'), 'managedId':managed.get(bundle,{}).get('id'), 'refreshable':bool(managed.get(bundle,{}).get('refreshable')), 'sourceAvailable':bool(managed.get(bundle,{}).get('sourcePath') and Path(managed[bundle]['sourcePath']).is_file()), 'deviceId':device_id})
         return sorted(result, key=lambda x: x['name'].lower())
 
     def settings(self):
@@ -227,7 +245,8 @@ class Backend:
         if method == 'library.list': return self.records('library')
         if method == 'jobs.list': return self.records('jobs')
         if method == 'jobs.cancel':
-            if p['jobId'] in self.jobs: self.jobs[p['jobId']].cancel()
+            task=self.jobs.get(p['jobId'])
+            if task and not task.cancelling():task.cancel()
             return {'ok':True}
         if method == 'pairings.list': return self.records('pairings')
         if method == 'pairing.inspect':
@@ -274,7 +293,11 @@ class Backend:
             self.save_record('jobs',job)
             self.jobs[job['id']]=asyncio.create_task(run(self,job,dict(p)))
             return job
-        if method == 'ipa.inspect': return await asyncio.to_thread(inspect_ipa,p['path'])
+        if method == 'ipa.inspect':
+            from backend.library import installation_metadata
+            package=await asyncio.to_thread(inspect_ipa,p['path'])
+            metadata=await asyncio.to_thread(installation_metadata,p['path'])
+            return {**package,**{key:metadata[key] for key in ('expires','profileStatus','profileSignatureVerified')}}
         if method == 'ipa.prepare':
             return await asyncio.to_thread(prepare_ipa,p['path'],p['destination'],p.get('options',{}))
         if method == 'ipa.exportSigned':
@@ -351,6 +374,21 @@ class Backend:
             result=await self.native_call(method,p)
             if method=='account.logout':self.account=None
             return result
+        if method=='app.refresh':
+            item=next((entry for entry in self.records('library') if entry['id']==p.get('libraryId')),None)
+            if item is None:raise ValueError('This app is not in the managed library.')
+            self.require_device_writes(item['deviceId'])
+            if not item.get('refreshable') or item.get('signingMode')!='appleId':
+                raise ValueError('This installation requires a new IPA or provisioning profile through Sideload.')
+            if not item.get('sourcePath') or not Path(item['sourcePath']).is_file():
+                raise ValueError('The saved refresh source is missing. Select the IPA again through Sideload.')
+            if not self.account:raise ValueError('Sign in to Apple before refreshing this app.')
+            if item.get('accountEmail') and str(self.account.get('email','')).casefold()!=item['accountEmail'].casefold():
+                raise ValueError('Sign in with the Apple account used for this installation.')
+            return await self.dispatch('install.start',{
+                'deviceId':item['deviceId'],'path':item['sourcePath'],'mode':'appleId',
+                'name':'Refresh '+item.get('name','app'),'expectedSourceSha256':item['sourceSha256'],
+                'originalPath':item.get('originalPath')})
         if method=='install.start':
             if p.get('mode','appleId') not in {'appleId','certificate','existing'}:
                 raise ValueError('Choose Apple account, certificate or an existing signature for installation.')
@@ -374,39 +412,8 @@ class Backend:
         self.save_record('jobs',job);self.emit({'event':'job','job':job})
 
     async def install(self,job,p):
-        lock=self.device_locks.setdefault(p['deviceId'],asyncio.Lock())
-        try:
-            async with lock:
-                path=p['path']
-                options=p.get('options',{})
-                if options:
-                    self.update_job(job,'Preparing app')
-                    directory=self.root/'prepared';directory.mkdir(exist_ok=True)
-                    prepared=await asyncio.to_thread(prepare_ipa,path,str(directory/(job['id']+'.ipa')),options)
-                    path=prepared['path']
-                if p.get('mode','appleId')!='existing':
-                    if not options:
-                        directory=self.root/'prepared';directory.mkdir(exist_ok=True)
-                        unique=directory/(job['id']+'.ipa')
-                        await asyncio.to_thread(shutil.copy2,path,unique)
-                        # Different devices can sign same-named IPAs concurrently.
-                        # Upstream extraction uses the filename as its cache key.
-                        path=str(unique)
-                    self.update_job(job,'Signing with your selected identity')
-                    signed=await self.native_call('ipa.sign',{**p,'path':path})
-                    path=signed['signedPath']
-                self.update_job(job,'Uploading and installing')
-                from pymobiledevice3.services.installation_proxy import InstallationProxyService
-                async with self.device(p['deviceId']) as device:
-                    async with InstallationProxyService(device) as service:
-                        await service.install_from_local(Path(path),handler=lambda percent,*_:self.update_job(job,'Installing app',progress=percent))
-                self.update_job(job,'Installed successfully',status='succeeded',progress=100)
-        except asyncio.CancelledError:
-            self.update_job(job,'Cancelled; an interrupted device installation may require retrying',status='cancelled')
-        except Exception as error:
-            self.update_job(job,clean_error(error),status='failed')
-        finally:
-            self.jobs.pop(job['id'],None)
+        from backend.installations import run
+        await run(self,job,p)
 
     async def serve(self):
         async def respond(request):

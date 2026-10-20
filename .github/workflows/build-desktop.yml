@@ -98,6 +98,14 @@ jobs:
           python scripts/verify-runtime.py
       - name: Package installer
         run: npx electron-builder --${{ matrix.platform }} --${{ matrix.arch }} --publish never
+      - name: Test assembled application with its bundled backend and signer
+        if: runner.os != 'Linux'
+        timeout-minutes: 3
+        run: npm run test:packaged
+      - name: Test assembled Linux application with its bundled backend and signer
+        if: runner.os == 'Linux'
+        timeout-minutes: 3
+        run: xvfb-run -a npm run test:packaged
       - name: Save target-specific installers and verification evidence
         uses: actions/upload-artifact@v4
         if: always()
@@ -110,4 +118,6 @@ jobs:
             desktop/release/*.deb
             desktop/outputs/desktop-dark.png
             desktop/outputs/desktop-failure.png
+            desktop/outputs/packaged-*.json
+            desktop/outputs/packaged-*.png
           retention-days: 3

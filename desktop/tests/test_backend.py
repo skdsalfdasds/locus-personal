@@ -1,6 +1,8 @@
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
+from unittest.mock import AsyncMock,Mock,patch
 
 from backend.server import Backend, clean_error
 
@@ -47,3 +49,15 @@ class BackendTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(self.events), 1)
         finally:
             await other.close()
+
+    async def test_native_deadline_stops_the_signer_and_invalidates_its_session(self):
+        process=SimpleNamespace(returncode=None,stdin=SimpleNamespace(write=Mock(),drain=AsyncMock()))
+        process.terminate=Mock(side_effect=lambda:setattr(process,'returncode',-15))
+        process.kill=Mock();process.wait=AsyncMock(return_value=-15)
+        self.backend.native=process;self.backend.ensure_native=AsyncMock()
+        self.backend.account={'email':'test@example.invalid'}
+        with patch('backend.server.NATIVE_TIMEOUT_SECONDS',0.01):
+            with self.assertRaisesRegex(RuntimeError,'timed out'):
+                await self.backend.native_call('ping',{})
+        process.terminate.assert_called_once();self.assertIsNone(self.backend.account)
+        self.assertEqual(self.backend.native_pending,{})
