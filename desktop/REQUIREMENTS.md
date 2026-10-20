@@ -49,7 +49,7 @@ Statuses below distinguish implemented code from verification on a physical devi
 | mDNS discovery, Apple TV PIN, iOS 27 host PIN | Outstanding |
 | Wireless debugging control | Implemented behind protection guard; not invoked on protected phone |
 | Windows one-click desktop installer | Packaged preview built and launched; frozen runtime, pairing import and write protection verified |
-| macOS and Linux installers | First Linux native/UI/runtime checks passed; packaging metadata fixed after failure. Windows development-Python startup and offline service handling fixed. Older Mac UI jobs stalled; new test cleanup/step deadlines added. Revised CI validation outstanding |
+| macOS and Linux installers | Linux x64 native compilation, UI tests, frozen runtime/offline-signing checks, AppImage and Debian packaging passed in run 39347865988. Both Mac builds remain in progress. Earlier Mac UI jobs timed out; bounded startup/cleanup diagnostics added |
 | License/source distribution completeness | Core notices prepared; full bundled dependency/source inventory outstanding before public release |
 | Rich speed location interface investigation | Simulator baseline succeeds after independent seeding; XCTest proxy leaves both coordinate and speed unchanged. This does not isolate speed delivery. Default target initialization plus a coordinate delivery gate added and running; never run on protected phone |
 | Life360 recognizes simulated driving activity | Unverified. No supported Core Motion automotive setter identified; coordinate speed alone does not prove drive recognition |
@@ -67,7 +67,8 @@ location setting or installed Waypoint app may be altered.
 - Desktop source tests are local in tests/; do not mistake mocked orchestration
   for successful physical installation or Life360 drive recognition.
 - Desktop platform build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39341388486
-- Instrumented simulator experiment: https://github.com/skdsalfdasds/locus-personal/actions/runs/39341952899
+- Current simulator launch-order experiment: https://github.com/skdsalfdasds/locus-personal/actions/runs/39348961613
+- Revised cross-platform build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39347865988
 - 51 backend tests and desktop navigation/offline-export checks pass locally. Native validation
   compiles in release mode. Frozen Windows backend import and protection checks
   use synthetic records and never open a phone service.
