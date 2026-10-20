@@ -12,7 +12,7 @@ import sqlite3
 import sys
 import uuid
 
-from backend.packages import inspect_ipa, prepare_ipa
+from backend.packages import inspect_ipa, prepare_ipa, pack_signed_bundle
 
 def now():
     return datetime.now(timezone.utc).isoformat()
@@ -218,7 +218,11 @@ class Backend:
             if updated['theme'] not in {'light','dark','system'}: raise ValueError('Invalid theme')
             self.db.execute('INSERT OR REPLACE INTO settings VALUES (1,?)',(json.dumps(updated),));self.db.commit()
             return updated
-        if method == 'devices.list': return await self.list_devices()
+        if method == 'devices.list':
+            try:
+                return await asyncio.wait_for(self.list_devices(),10)
+            except asyncio.TimeoutError:
+                raise RuntimeError('Apple device discovery timed out. Check the Apple device service and USB connection.') from None
         if method == 'apps.list': return await self.list_apps(p['deviceId'])
         if method == 'library.list': return self.records('library')
         if method == 'jobs.list': return self.records('jobs')
@@ -273,6 +277,31 @@ class Backend:
         if method == 'ipa.inspect': return await asyncio.to_thread(inspect_ipa,p['path'])
         if method == 'ipa.prepare':
             return await asyncio.to_thread(prepare_ipa,p['path'],p['destination'],p.get('options',{}))
+        if method == 'ipa.exportSigned':
+            import plistlib
+            import tempfile
+            if Path(p['path']).resolve()==Path(p['destination']).resolve():
+                raise ValueError('Export to a different file to preserve the source IPA.')
+            entitlements=p.get('entitlements')
+            if entitlements is not None and not isinstance(entitlements,dict):
+                raise ValueError('Custom entitlements must be a JSON object.')
+            xml=plistlib.dumps(entitlements).decode() if entitlements is not None else None
+            directory=self.root/'export-jobs';directory.mkdir(exist_ok=True)
+            with tempfile.TemporaryDirectory(dir=directory) as work:
+                prepared=await asyncio.to_thread(prepare_ipa,p['path'],str(Path(work)/(str(uuid.uuid4())+'.ipa')),p.get('options',{}))
+                signed=await self.native_call('ipa.adhoc',{'path':prepared['path'],'entitlementsXml':xml})
+                base=(self.root/'native/exports').resolve()
+                workspace=Path(signed['workspace']).resolve()
+                app=Path(signed['signedPath']).resolve()
+                if workspace.parent!=base or not re.fullmatch(r'adhoc-[A-Za-z0-9]+',workspace.name) or not app.is_relative_to(workspace):
+                    raise RuntimeError('The signing engine returned an unexpected workspace.')
+                try:
+                    result=await asyncio.to_thread(pack_signed_bundle,app,prepared['path'],p['destination'])
+                    result['verifiedBinaries']=signed['verifiedBinaries']
+                    return result
+                finally:
+                    # Resolved and bounded above before recursive removal.
+                    await asyncio.to_thread(shutil.rmtree,workspace)
         if method == 'pairing.export':
             item=next(item for item in self.records('pairings') if item['id']==p['pairingId'])
             shutil.copy2(item['path'],p['destination']);return {'path':p['destination']}
@@ -323,6 +352,8 @@ class Backend:
             if method=='account.logout':self.account=None
             return result
         if method=='install.start':
+            if p.get('mode','appleId') not in {'appleId','certificate','existing'}:
+                raise ValueError('Choose Apple account, certificate or an existing signature for installation.')
             if p.get('mode') == 'existing' and p.get('options'):
                 raise ValueError('Customizing an IPA invalidates its signature. Choose Apple account or Certificate signing before installing.')
             job={'id':str(uuid.uuid4()),'name':p.get('name','Install app'),'status':'queued','stage':'Waiting','progress':None,'started':now(),'deviceId':p.get('deviceId'),'logs':[]}
@@ -354,6 +385,13 @@ class Backend:
                     prepared=await asyncio.to_thread(prepare_ipa,path,str(directory/(job['id']+'.ipa')),options)
                     path=prepared['path']
                 if p.get('mode','appleId')!='existing':
+                    if not options:
+                        directory=self.root/'prepared';directory.mkdir(exist_ok=True)
+                        unique=directory/(job['id']+'.ipa')
+                        await asyncio.to_thread(shutil.copy2,path,unique)
+                        # Different devices can sign same-named IPAs concurrently.
+                        # Upstream extraction uses the filename as its cache key.
+                        path=str(unique)
                     self.update_job(job,'Signing with your selected identity')
                     signed=await self.native_call('ipa.sign',{**p,'path':path})
                     path=signed['signedPath']

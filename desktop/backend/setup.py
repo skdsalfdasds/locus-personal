@@ -8,6 +8,7 @@ import plistlib
 import os
 import sys
 import uuid
+import shutil
 
 from backend.packages import inspect_ipa
 
@@ -78,8 +79,11 @@ async def run(backend, job, params):
                     params.pop('password', None)
             backend.require_device_writes(device_id)
             backend.update_job(job, 'Signing Waypoint', progress=27)
+            inputs=backend.root/'prepared';inputs.mkdir(exist_ok=True)
+            unique=inputs/(job['id']+'.ipa')
+            await asyncio.to_thread(shutil.copy2,path,unique)
             signed = await backend.native_call('ipa.sign', {
-                'path': str(path), 'deviceId': device_id,
+                'path': str(unique), 'deviceId': device_id,
                 'deviceName': state['device']['name'], 'mode': 'appleId',
             })
             signed_path = Path(signed['signedPath'])

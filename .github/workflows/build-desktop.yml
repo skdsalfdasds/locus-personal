@@ -81,9 +81,11 @@ jobs:
         run: npm run build
       - name: Test desktop interface
         if: runner.os != 'Linux'
+        timeout-minutes: 3
         run: npm run test:desktop
       - name: Test desktop interface on Linux
         if: runner.os == 'Linux'
+        timeout-minutes: 3
         run: xvfb-run -a npm run test:desktop
       - uses: actions/download-artifact@v4
         with:
@@ -107,4 +109,5 @@ jobs:
             desktop/release/*.AppImage
             desktop/release/*.deb
             desktop/outputs/desktop-dark.png
+            desktop/outputs/desktop-failure.png
           retention-days: 3

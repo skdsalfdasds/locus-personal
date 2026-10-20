@@ -69,7 +69,8 @@
       "target": [
         "AppImage",
         "deb"
-      ]
+      ],
+      "maintainer": "Waypoint contributors"
     },
     "deb": {
       "depends": [
@@ -91,5 +92,6 @@
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true
     }
-  }
+  },
+  "homepage": "https://github.com/skdsalfdasds/locus-personal/tree/main/desktop"
 }

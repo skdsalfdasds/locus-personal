@@ -10,6 +10,10 @@ idevice = { git = "https://github.com/jkcoxson/idevice.git", rev = "3854a5df4a5a
 serde_json = "1"
 tokio = { version = "1.49", features = ["rt-multi-thread", "macros", "sync", "time"] }
 plist = "1"
+apple-codesign = { version = "=0.29.0", default-features = false }
+zip = { version = "8.3", default-features = false, features = ["deflate"] }
+tempfile = "3"
+walkdir = "2"
 
 [patch.crates-io]
 idevice = { git = "https://github.com/jkcoxson/idevice.git", rev = "3854a5df4a5a6dee71ffce4d8befc2ea356a8065" }

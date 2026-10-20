@@ -14,7 +14,6 @@ Main components:
 | apple-codesign, used unmodified by the signer | MPL-2.0 | https://github.com/indygreg/apple-platform-rs |
 | Electron | MIT and bundled Chromium/Node notices | https://github.com/electron/electron |
 | React | MIT | https://github.com/facebook/react |
-| Lucide icons | ISC | https://github.com/lucide-icons/lucide |
 | LIEF | Apache-2.0 | https://github.com/lief-project/LIEF |
 | Pillow | MIT-CMU | https://github.com/python-pillow/Pillow |
 | cryptography | Apache-2.0 OR BSD-3-Clause | https://github.com/pyca/cryptography |

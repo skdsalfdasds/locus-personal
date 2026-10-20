@@ -5433,10 +5433,14 @@ name = "waypoint-engine"
 version = "0.1.0"
 dependencies = [
  "apparition-core",
+ "apple-codesign",
  "idevice",
  "plist",
  "serde_json",
+ "tempfile",
  "tokio",
+ "walkdir",
+ "zip 8.6.0",
 ]
 
 [[package]]

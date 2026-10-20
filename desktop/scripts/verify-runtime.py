@@ -6,6 +6,7 @@ from pathlib import Path
 import plistlib
 import subprocess
 import tempfile
+import hashlib
 
 
 async def main():
@@ -32,7 +33,9 @@ async def main():
         async def call(method, params=None):
             service.stdin.write((json.dumps({'id':method,'method':method,'params':params or {}})+'\n').encode())
             await service.stdin.drain()
-            return json.loads(await asyncio.wait_for(service.stdout.readline(),30))
+            while True:
+                message=json.loads(await asyncio.wait_for(service.stdout.readline(),60))
+                if message.get('id')==method:return message
         try:
             status = await call('system.status')
             assert status['result']['nativeReady']
@@ -49,6 +52,16 @@ async def main():
             blocked=await call('pairing.validate',{'pairingId':imported['result']['id'],
                                                 'deviceId':'synthetic-protected-phone'})
             assert blocked['error']['type']=='PermissionError'
+            source_hash=hashlib.sha256(ipa.read_bytes()).digest()
+            exported_path=Path(state)/'adhoc-export.ipa'
+            exported=await call('ipa.exportSigned',{'path':str(ipa),'destination':str(exported_path),
+                'entitlements':{'get-task-allow':True}})
+            assert exported['result']['signatureMode']=='adhoc'
+            assert exported['result']['verifiedBinaries']>0
+            assert not exported['result']['appleProvisioned']
+            assert hashlib.sha256(ipa.read_bytes()).digest()==source_hash
+            subprocess.run([os.sys.executable,str(root/'scripts/verify-adhoc.py'),str(exported_path),
+                            '--expect-task-allow'],check=True,timeout=30)
         finally:
             service.stdin.close()
             await asyncio.wait_for(service.wait(),10)

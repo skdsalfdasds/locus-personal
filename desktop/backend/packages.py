@@ -9,15 +9,18 @@ import shutil
 import stat
 import tempfile
 import zipfile
+from collections import deque
 
 MAX_UNPACKED = 4 * 1024**3
 
 def checked_entries(archive: zipfile.ZipFile):
     total = 0
     seen = set()
-    for entry in archive.infolist():
+    entries=archive.infolist()
+    links={}
+    for entry in entries:
         path = PurePosixPath(entry.filename)
-        if path.is_absolute() or '..' in path.parts or '\\' in entry.filename or '\x00' in entry.filename:
+        if path.is_absolute() or '..' in path.parts or any(':' in part for part in path.parts) or '\\' in entry.filename or '\x00' in entry.filename:
             raise ValueError('The IPA contains an unsafe file path.')
         if entry.filename in seen:
             raise ValueError('The IPA contains duplicate file entries.')
@@ -27,10 +30,72 @@ def checked_entries(archive: zipfile.ZipFile):
             raise ValueError('The unpacked IPA exceeds the 4 GB package limit.')
         if stat.S_ISLNK(entry.external_attr >> 16):
             target = archive.read(entry).decode('utf-8')
+            if '\\' in target or '\x00' in target or any(':' in part for part in PurePosixPath(target).parts) or PurePosixPath(target).is_absolute():
+                raise ValueError('The IPA contains an unsafe symlink target.')
+            links[path.as_posix()]=target
             resolved = os.path.normpath(str(path.parent / target)).replace('\\', '/')
             if target.startswith('/') or resolved.startswith('../') or resolved == '..':
                 raise ValueError('The IPA contains a symlink outside its package.')
-        yield entry
+    # Resolve the complete virtual link graph. Individually safe links can still
+    # escape when a parent symlink changes the meaning of ".." in another link.
+    for entry in entries:
+        pending=deque(PurePosixPath(entry.filename).parts)
+        resolved=[]
+        followed=0
+        while pending:
+            part=pending.popleft()
+            if part in {'','.'}:continue
+            if part=='..':
+                if not resolved:raise ValueError('The IPA contains a symlink outside its package.')
+                resolved.pop();continue
+            if not resolved and part.endswith(':'):
+                raise ValueError('The IPA contains an unsafe drive-qualified path.')
+            resolved.append(part)
+            candidate='/'.join(resolved)
+            if candidate in links:
+                followed+=1
+                if followed>40:raise ValueError('The IPA contains a cyclic or excessively nested symlink.')
+                resolved.pop()
+                pending.extendleft(reversed(PurePosixPath(links[candidate]).parts))
+    return entries
+
+
+def pack_signed_bundle(app, original_ipa, destination):
+    app, destination=Path(app), Path(destination)
+    if destination.resolve()==Path(original_ipa).resolve():
+        raise ValueError('Export to a different file to preserve the source IPA.')
+    with zipfile.ZipFile(original_ipa) as archive:
+        original={entry.filename:entry for entry in checked_entries(archive)}
+    prefix='Payload/'+app.name+'/'
+    destination.parent.mkdir(parents=True,exist_ok=True)
+    handle=tempfile.NamedTemporaryFile(dir=destination.parent,suffix='.ipa',delete=False)
+    temporary=Path(handle.name);handle.close()
+    try:
+        with zipfile.ZipFile(temporary,'w',compression=zipfile.ZIP_DEFLATED) as archive:
+            for folder, dirs, files in os.walk(app,followlinks=False):
+                for name in [*dirs,*files]:
+                    path=Path(folder)/name
+                    relative=path.relative_to(app).as_posix()
+                    stored=prefix+relative
+                    old=original.get(stored)
+                    if old and stat.S_ISLNK(old.external_attr>>16) and not path.is_symlink():
+                        raise ValueError('The signing engine could not preserve a symbolic link on this platform.')
+                    if path.is_symlink():
+                        info=zipfile.ZipInfo(stored);info.create_system=3
+                        info.external_attr=(stat.S_IFLNK|0o777)<<16
+                        archive.writestr(info,os.readlink(path).encode('utf-8'))
+                    elif path.is_file():
+                        info=zipfile.ZipInfo(stored);info.create_system=3
+                        info.external_attr=old.external_attr if old else (stat.S_IFREG|0o644)<<16
+                        info.compress_type=zipfile.ZIP_DEFLATED
+                        with path.open('rb') as source, archive.open(info,'w',force_zip64=True) as target:
+                            shutil.copyfileobj(source,target,1024*1024)
+        result=inspect_ipa(temporary)
+        os.replace(temporary,destination)
+        result.update(path=str(destination.resolve()),filename=destination.name,signatureMode='adhoc',appleProvisioned=False)
+        return result
+    finally:
+        temporary.unlink(missing_ok=True)
 
 def main_bundle(names):
     infos = [n for n in names if n.startswith('Payload/') and n.endswith('.app/Info.plist') and n.count('/') == 2]

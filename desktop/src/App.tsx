@@ -45,6 +45,7 @@ export default function App(){
   const [mode,setMode]=useState('appleId');
   const [options,setOptions]=useState<Record<string,any>>({});
   const [plistText,setPlistText]=useState('');
+  const [entitlementsText,setEntitlementsText]=useState('');
   const [advanced,setAdvanced]=useState(false);
   const [login,setLogin]=useState(false);
   const [email,setEmail]=useState('');
@@ -78,8 +79,14 @@ export default function App(){
   }
   const refresh=useCallback(async()=>{
     try{
-      const [s,d,j,p]=await Promise.all([call<Status>('system.status'),call<Device[]>('devices.list'),call<Job[]>('jobs.list'),call<Pairing[]>('pairings.list')]);
-      setStatus(s);setDevices(d);setJobs(j);setPairings(p);
+      const [s,d,j,p]=await Promise.allSettled([
+        call<Status>('system.status').then(setStatus),
+        call<Device[]>('devices.list').then(setDevices,error=>{setDevices([]);throw error;}),
+        call<Job[]>('jobs.list').then(setJobs),
+        call<Pairing[]>('pairings.list').then(setPairings),
+      ]);
+      const failed=[s,d,j,p].find(result=>result.status==='rejected');
+      if(failed?.status==='rejected')setError(String(failed.reason?.message||failed.reason));
     }catch(e){setError((e as Error).message);}
   },[call]);
   useEffect(()=>{refresh();const timer=setInterval(refresh,10000);return()=>clearInterval(timer);},[refresh]);
@@ -107,7 +114,7 @@ export default function App(){
     const chosen=path||await window.waypoint?.chooseFile('ipa');if(!chosen)return;
     await perform('inspect',async()=>{
       const data=await call<Package>('ipa.inspect',{path:chosen});
-      setPkg(data);setOptions({});setPlistText('');setPage('sideload');
+      setPkg(data);setOptions({});setPlistText('');setEntitlementsText('');setPage('sideload');
     });
   }
   async function install(){
@@ -119,10 +126,15 @@ export default function App(){
         if(!custom||Array.isArray(custom)||typeof custom!=='object')throw new Error('Info.plist changes must be a JSON object.');
       }
       const allOptions={...options,...(Object.keys(custom).length?{plistChanges:custom}:{})};
-      if(mode==='export'){
-        const destination=await window.waypoint?.saveFile(pkg.name+'-modified.ipa');if(!destination)return;
-        await call('ipa.prepare',{path:pkg.path,destination,options:allOptions});
-        setNotice('Modified IPA exported. Sign it before installation.');return;
+      if(mode==='export'||mode==='adhoc'){
+        let entitlements;
+        if(mode==='adhoc'&&entitlementsText.trim()){
+          entitlements=JSON.parse(entitlementsText);
+          if(!entitlements||Array.isArray(entitlements)||typeof entitlements!=='object')throw new Error('Custom entitlements must be a JSON object.');
+        }
+        const destination=await window.waypoint?.saveFile(pkg.name+(mode==='adhoc'?'-adhoc.ipa':'-modified.ipa'));if(!destination)return;
+        await call(mode==='adhoc'?'ipa.exportSigned':'ipa.prepare',{path:pkg.path,destination,options:allOptions,...(entitlements?{entitlements}:{})});
+        setNotice(mode==='adhoc'?'Ad-hoc signed IPA exported. No Apple provisioning was added.':'Modified IPA exported. Sign it before installation.');return;
       }
       if(!device)return;
       if(mode==='appleId'&&!status?.account){setLogin(true);return;}
@@ -171,6 +183,7 @@ export default function App(){
     if(file&&window.waypoint)loadPackage(window.waypoint.pathForFile(file));
   }}><h3>{busy==='inspect'?'Reading package…':'Drop an IPA here'}</h3><p>Or choose a file from your computer.</p><Button onClick={()=>loadPackage()}>Choose IPA</Button></div>;
   const filteredApps=apps.filter(a=>(a.name+' '+a.bundleId).toLowerCase().includes(search.toLowerCase()));
+  const exportMode=mode==='export'||mode==='adhoc';
 
   return <div className="app-shell">
     <aside className="sidebar">
@@ -196,15 +209,16 @@ export default function App(){
             {!!pkg?.extensions.length&&<fieldset><legend>Remove individual extensions</legend>{pkg.extensions.map(ext=><label className="checkbox" key={ext.path}><input type="checkbox" checked={(options.removeExtensions||[]).includes(ext.path)} onChange={e=>setOptions({...options,removeExtensions:e.target.checked?[...(options.removeExtensions||[]),ext.path]:(options.removeExtensions||[]).filter((p:string)=>p!==ext.path)})}/>{ext.name}</label>)}</fieldset>}
             <div className="preference"><div><strong>App icon file</strong><p>{options.iconPath?'Replacement image selected':'Keep the package’s existing image.'}</p></div><Button onClick={async()=>{const path=await window.waypoint?.chooseFile('icon');if(path)setOptions({...options,iconPath:path});}}>Choose image</Button></div>
             <label>Info.plist changes<textarea value={plistText} onChange={e=>setPlistText(e.target.value)} spellCheck={false} placeholder={'{ "ExampleKey": true }'}/><small>JSON object. Executable and package identity keys are protected.</small></label>
-            <p className="muted-text">Tweak injection, custom entitlements, and ad-hoc signing are not implemented in this build.</p>
+            <p className="muted-text">Tweak injection is still in development. Custom entitlements are available with ad-hoc export.</p>
           </div>}</div>
         </section><aside className="detail-column">
-          <h2>Signing & installation</h2><label>Method<select value={mode} onChange={e=>setMode(e.target.value)}><option value="appleId">Apple account</option><option value="certificate">Certificate and profile</option><option value="existing">Install as signed</option><option value="export">Export modified IPA</option></select></label>
+          <h2>Signing & installation</h2><label>Method<select aria-label="Signing method" value={mode} onChange={e=>setMode(e.target.value)}><option value="appleId">Apple account</option><option value="certificate">Certificate and profile</option><option value="existing">Install as signed</option><option value="export">Export modified IPA</option><option value="adhoc">Export ad-hoc signed IPA</option></select></label>
           {mode==='appleId'&&<div className="detail-row"><span>{status?.account?'Apple account connected':'No account connected'}</span><button className="text-button" onClick={()=>setLogin(true)}>{status?.account?'Change':'Sign in'}</button></div>}
           {mode==='certificate'&&<div className="form-stack"><Button onClick={async()=>setCertificate(await window.waypoint?.chooseFile('certificate')||'')}>{identityId?'Certificate selected':'Import certificate'}</Button><Button onClick={importProfile}>{profileId?'Profile selected':'Import profile'}</Button></div>}
+          {mode==='adhoc'&&<label>Custom entitlements<textarea aria-label="Custom entitlements" aria-describedby="entitlements-help" value={entitlementsText} onChange={e=>setEntitlementsText(e.target.value)} spellCheck={false} placeholder={'{ "get-task-allow": true }'}/><small id="entitlements-help">Optional JSON object, applied to the main executable.</small></label>}
           <dl className="facts"><div><dt>Device</dt><dd>{deviceName(device)}</dd></div><div><dt>Connection</dt><dd>{device?.transport||'Disconnected'}</dd></div></dl>
-          <Button kind="primary full" disabled={!pkg||!!busy||(mode!=='export'&&(!device||blocked))||(mode!=='existing'&&mode!=='export'&&!status?.nativeReady)||(mode==='certificate'&&!identityId)} onClick={install}>{busy==='install'?'Working…':mode==='export'?'Export IPA':blocked?'Device protected':'Install application'}</Button>
-          <p className="fine-print">{mode==='export'?'Exports an unsigned copy. The original file is preserved.':'A free developer profile typically needs renewal every seven days. Apple account limits apply.'}</p>
+          <Button kind="primary full" disabled={!pkg||!!busy||(!exportMode&&(!device||blocked))||(mode!=='existing'&&mode!=='export'&&!status?.nativeReady)||(mode==='certificate'&&!identityId)} onClick={install}>{busy==='install'?'Working…':mode==='adhoc'?'Export ad-hoc IPA':mode==='export'?'Export IPA':blocked?'Device protected':'Install application'}</Button>
+          <p className="fine-print">{mode==='adhoc'?'Ad-hoc signatures contain no Apple provisioning. This export cannot be installed on a standard iPhone.':mode==='export'?'Exports an unsigned copy. The original file is preserved.':'A free developer profile typically needs renewal every seven days. Apple account limits apply.'}</p>
         </aside></div>}
         {page==='applications'&&<section><div className="list-toolbar"><span>{apps.length} applications</span><input aria-label="Search installed apps" placeholder="Filter applications" value={search} onChange={e=>setSearch(e.target.value)}/></div>
           {apps.length?<div className="table-scroll"><table><thead><tr><th>Application</th><th>Version</th><th>Managed by</th><th>File sharing</th><th/></tr></thead><tbody>{filteredApps.map(app=><tr key={app.bundleId}><td><strong>{app.name}</strong>{!hidden&&<small className="mono">{app.bundleId}</small>}</td><td>{app.version||'—'}</td><td>{app.managed?'Waypoint':'—'}</td><td>{app.fileSharing?'Available':'—'}</td><td><button className="text-button danger" disabled={blocked} onClick={()=>setDeleteApp(app)}>Uninstall</button></td></tr>)}</tbody></table>{filteredApps.length===0&&<Empty title="No matching applications"/>}</div>:<Empty title="No applications to show">Connect a trusted device to view its apps.</Empty>}

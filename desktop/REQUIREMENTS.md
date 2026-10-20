@@ -29,8 +29,8 @@ Statuses below distinguish implemented code from verification on a physical devi
 | Certificate/profile signing | Native engine integrated; live signing/installation verification outstanding |
 | Normal install of already-signed IPA | Implemented; rejects unsigned customization in this mode |
 | Modified unsigned IPA export | Implemented and tested |
-| Ad-hoc signing/export | Outstanding |
-| Custom entitlements | Outstanding |
+| Ad-hoc signing/export | Implemented offline; actual Waypoint export independently verified across 1,861 code pages, tamper rejection and source preservation; frozen-runtime check in progress |
+| Custom entitlements | Main executable supported for ad-hoc export, including verified entitlement seal; Apple-account/certificate customization remains outstanding |
 | Multiple dylib/framework/bundle/deb injections | Outstanding |
 | Substrate/Substitute support | Outstanding |
 | Keep signing sessions across restart | Outstanding; password is not saved |
@@ -49,9 +49,9 @@ Statuses below distinguish implemented code from verification on a physical devi
 | mDNS discovery, Apple TV PIN, iOS 27 host PIN | Outstanding |
 | Wireless debugging control | Implemented behind protection guard; not invoked on protected phone |
 | Windows one-click desktop installer | Packaged preview built and launched; frozen runtime, pairing import and write protection verified |
-| macOS and Linux installers | Platform-native CI builds running for Linux x64, Intel Mac and Apple Silicon Mac; results not yet verified |
+| macOS and Linux installers | First Linux native/UI/runtime checks passed; packaging metadata fixed after failure. Windows development-Python startup and offline service handling fixed. Older Mac UI jobs stalled; new test cleanup/step deadlines added. Revised CI validation outstanding |
 | License/source distribution completeness | Core notices prepared; full bundled dependency/source inventory outstanding before public release |
-| Rich speed location interface investigation | Isolated XCTest probe compiles; first simulator run received no callbacks and is inconclusive; authorization diagnostics running; never run on protected phone |
+| Rich speed location interface investigation | XCTest observer compiles; instrumented run had authorized location access but kCLErrorDomain 0 and no callbacks. Inconclusive about speed. Separate simulator baseline added and running; never run on protected phone |
 | Life360 recognizes simulated driving activity | Unverified. No supported Core Motion automotive setter identified; coordinate speed alone does not prove drive recognition |
 
 ## Protected-phone constraint
@@ -68,6 +68,6 @@ location setting or installed Waypoint app may be altered.
   for successful physical installation or Life360 drive recognition.
 - Desktop platform build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39341388486
 - Instrumented simulator experiment: https://github.com/skdsalfdasds/locus-personal/actions/runs/39341952899
-- 41 backend tests and desktop navigation checks pass locally. Native validation
+- 51 backend tests and desktop navigation/offline-export checks pass locally. Native validation
   compiles in release mode. Frozen Windows backend import and protection checks
   use synthetic records and never open a phone service.

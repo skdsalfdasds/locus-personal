@@ -10,12 +10,13 @@ let mainWindow, backend, quitting = false;
 const pending = new Map();
 const pairingMethods=['pairing.inspect','pairing.import','pairing.validate','pairing.destinations'];
 const root = path.join(__dirname, '..');
-const allowed = new Set(['system.status','settings.get','settings.save','devices.list','apps.list','library.list','jobs.list','jobs.cancel','ipa.inspect','ipa.prepare','ipa.sign','install.start','pairings.list','pairing.createLockdown','pairing.createRemote','pairing.export','pairing.install','device.enableWireless','account.login','account.logout','account.certificates','account.appIds','identity.import','profile.import','prompt.reply','app.uninstall','setup.check','setup.start']);
+const allowed = new Set(['system.status','settings.get','settings.save','devices.list','apps.list','library.list','jobs.list','jobs.cancel','ipa.inspect','ipa.prepare','ipa.exportSigned','ipa.sign','install.start','pairings.list','pairing.createLockdown','pairing.createRemote','pairing.export','pairing.install','device.enableWireless','account.login','account.logout','account.certificates','account.appIds','identity.import','profile.import','prompt.reply','app.uninstall','setup.check','setup.start']);
 for(const method of pairingMethods)allowed.add(method);
 function startBackend() {
   const packaged = path.join(process.resourcesPath, 'runtime', 'waypoint-backend', process.platform === 'win32' ? 'waypoint-backend.exe' : 'waypoint-backend');
   const localPython = path.join(root,'.venv',process.platform==='win32'?'Scripts/python.exe':'bin/python');
-  const devPython = process.env.WAYPOINT_PYTHON || (fs.existsSync(localPython) ? localPython : 'python3');
+  const hostedPython = process.env.pythonLocation ? path.join(process.env.pythonLocation,process.platform==='win32'?'python.exe':'bin/python3') : null;
+  const devPython = process.env.WAYPOINT_PYTHON || (fs.existsSync(localPython) ? localPython : hostedPython&&fs.existsSync(hostedPython) ? hostedPython : process.platform==='win32'?'python':'python3');
   const command = app.isPackaged ? packaged : devPython;
   const args = app.isPackaged ? [] : ['-m', 'backend.server'];
   backend = spawn(command, args, { cwd: app.isPackaged ? path.dirname(packaged) : root, windowsHide: true, env: { ...process.env, PYTHONUTF8:'1', WAYPOINT_DATA_DIR:app.getPath('userData'), WAYPOINT_BUNDLED_IPA:app.isPackaged ? path.join(process.resourcesPath,'runtime','apps','Waypoint.ipa') : '', WAYPOINT_NATIVE_ENGINE:app.isPackaged ? path.join(process.resourcesPath,'runtime',process.platform==='win32'?'waypoint-engine.exe':'waypoint-engine') : '' }, stdio: ['pipe','pipe','pipe'] });

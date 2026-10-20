@@ -40,6 +40,21 @@ The policy lives in the user's application data directory, outside source and
 build artifacts. It is not copied into installers for other users. A malformed
 policy blocks writes instead of silently disabling protection.
 
+## Offline IPA export
+
+The Sideload page can export a modified unsigned IPA or an ad-hoc signed IPA
+without a connected phone or Apple account. Ad-hoc export supports an optional
+JSON entitlement dictionary for the main executable. It preserves the source
+IPA, strips Apple provisioning, verifies the generated code-directory hashes,
+and publishes the output only after successful validation.
+
+An ad-hoc signature does not authorize installation on a standard iPhone. Use
+Apple-account or certificate/profile signing for normal installation. Custom
+entitlements for those Apple-provisioned modes remain in development.
+
+The offline verification fixture in scripts/verify-adhoc.py independently checks
+the code-page and entitlement digests and rejects modified executable data.
+
 ## Development
 
 Requirements: Node.js, Python 3.13, Rust, and the platform's native C/C++ build tools.

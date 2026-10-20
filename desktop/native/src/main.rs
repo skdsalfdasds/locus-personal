@@ -2,6 +2,7 @@ use std::{collections::HashMap, io::{self, BufRead, Write}, path::{Path, PathBuf
 use apparition_core::api::{self, Session, TwoFactorCallbackResponse};
 use idevice::{IdeviceService, provider::IdeviceProvider, lockdown::LockdownClient, remote_pairing::{RpPairingFile, RemotePairingLockdownService}, usbmuxd::{UsbmuxdAddr, UsbmuxdConnection, Connection}};
 use serde_json::{Value, json};
+mod adhoc;
 
 type Replies = Arc<Mutex<HashMap<u64, mpsc::SyncSender<Value>>>>;
 static NEXT_PROMPT: AtomicU64 = AtomicU64::new(1);
@@ -47,6 +48,10 @@ async fn dispatch(id: &Value, method: &str, p: &Value, data: &Path, session: &mu
     match method {
         "ping" => Ok(json!({"engine":"waypoint-native","version":env!("CARGO_PKG_VERSION"),"builtinAnisette":api::builtin_anisette_available()})),
         "devices.list" => devices().await,
+        "ipa.adhoc" => {
+            progress(id,"Creating and verifying ad-hoc signatures.");
+            adhoc::export(Path::new(text(p,"path")?),data,p["entitlementsXml"].as_str())
+        },
         "pairing.validate" => {
             let udid=text(p,"deviceId")?; safe_id(udid)?;
             let provider=provider(udid).await?;
