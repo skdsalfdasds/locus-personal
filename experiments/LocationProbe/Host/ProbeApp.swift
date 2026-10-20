@@ -8,7 +8,8 @@ struct ProbeApp: App {
     var body: some Scene {
         WindowGroup {
             NavigationStack {
-                Form {
+                ScrollView {
+                  VStack(alignment: .leading, spacing: 14) {
                     Section("Location delivered by iOS") {
                         Text(observer.authorizationSummary).accessibilityIdentifier("observed-authorization")
                         Text(observer.locationSummary).accessibilityIdentifier("observed-location")
@@ -35,6 +36,7 @@ struct ProbeApp: App {
                         Text("This app observes iOS location and motion. Explicit relay buttons send test samples to the separate XCTest runner. No motion activity setter is used.")
                         Text("Observations are stored locally in Documents/location-observations.jsonl. They can contain location data.")
                     }
+                  }.padding()
                 }.navigationTitle("Waypoint Probe")
                     .safeAreaInset(edge: .bottom) {
                         Text(observer.relaySummary).font(.footnote).padding(8)
@@ -133,8 +135,15 @@ final class LocationObserver: NSObject, ObservableObject, CLLocationManagerDeleg
             do {
                 try await RichLocationRelayClient(token: token).send(sample)
                 relaySummary = "Relay accepted"
+                append(["kind": "relayResult", "accepted": true,
+                        "requestedLatitude": latitude, "requestedSpeed": speed,
+                        "timestamp": Date().timeIntervalSince1970])
             } catch {
                 relaySummary = error.localizedDescription
+                append(["kind": "relayResult", "accepted": false,
+                        "requestedLatitude": latitude, "requestedSpeed": speed,
+                        "error": error.localizedDescription,
+                        "timestamp": Date().timeIntervalSince1970])
             }
         }
     }
