@@ -13,6 +13,10 @@ jobs:
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
       - name: Install XcodeGen
         run: brew list xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - name: Validate rich sample protocol boundaries without a device
+        run: |
+          swiftc Locus/Engine/RichLocationRelay.swift Tests/RichLocationSampleChecks.swift -o "$RUNNER_TEMP/rich-location-checks"
+          "$RUNNER_TEMP/rich-location-checks"
       - name: Build isolated observer and XCTest runner
         working-directory: experiments/LocationProbe
         run: |

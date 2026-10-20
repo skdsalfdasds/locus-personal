@@ -29,6 +29,11 @@ The URL is shown in the interface and can be changed. Password authentication is
 handled by the local native engine against Apple; the Anisette provider supplies
 verification data. macOS and Linux have an optional bundled local provider.
 
+Apple verification supports code submission, resending the current challenge,
+trusted-device delivery, and text messages to a trusted number Apple supplied.
+The interface shows only the last two digits of those numbers. Replies are
+validated against the active, single-use native challenge; codes stay in memory.
+
 ## Active phone protection
 
 This laptop has a local policy protecting the user's existing active Waypoint

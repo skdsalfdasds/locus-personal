@@ -238,6 +238,10 @@ tbody tr:hover { background: color-mix(in srgb, var(--sidebar) 40%, transparent)
 .dialog-heading p { font-size: 11px; color: var(--muted); margin-top: 8px; }
 .dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 11px; padding-top: 13px; }
 .verification-code { letter-spacing: 8px; text-align: center; font-size: 25px; height: 54px; font-variant-numeric: tabular-nums; }
+.verification-options { border-top: 1px solid var(--line); padding-top: 17px; font-size: 12px; }
+.verification-options summary { cursor: pointer; color: var(--muted); }
+.verification-options > div { padding-top: 18px; }
+.verification-options .form-field { display: grid; gap: 7px; }
 .code-block { background: var(--canvas); border: 1px solid var(--line); padding: 15px; font: 11px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace; max-height: 55vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .log-lines { max-height: 55vh; overflow-y: auto; }
 .log-lines > div { display: grid; grid-template-columns: 80px 1fr; gap: 18px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 11px; }

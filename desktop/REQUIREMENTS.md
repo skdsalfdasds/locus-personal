@@ -11,7 +11,7 @@ Statuses below distinguish implemented code from verification on a physical devi
 | Clean professional UI, no decorative icons | Implemented; Electron navigation and no-SVG/image checks pass |
 | Purposeful animation | Page/dialog transitions, progressive stages, animated progress bar; reduced-motion support |
 | One setup flow: Apple login → sign → install → pair → transfer | Implemented; orchestration tests pass using mocked transports |
-| Real Apple account login and 2FA | Native engine compiles; interactive UI implemented; live account verification outstanding |
+| Real Apple account login and 2FA | Native engine integrated; six-digit code, resend, trusted-device delivery and trusted-number SMS controls implemented. Backend validates single-use active challenges and closes expired prompts; live account verification remains outstanding |
 | USB discovery and device metadata | Verified read-only on Windows with iPhone 16e / iOS 26.5.2 |
 | Wireless discovery via Apple device service | Implemented through usbmux; independent Wi-Fi verification outstanding |
 | Read-only Developer Mode detection | Implemented and verified before phone disconnection |
@@ -49,9 +49,9 @@ Statuses below distinguish implemented code from verification on a physical devi
 | mDNS discovery, Apple TV PIN, iOS 27 host PIN | Outstanding |
 | Wireless debugging control | Implemented behind protection guard; not invoked on protected phone |
 | Windows one-click desktop installer | Packaged preview built and launched; frozen runtime, pairing import and write protection verified |
-| macOS and Linux installers | All four targets passed build/runtime/UI/packaging in run 39347865988. New assembled-application launch and real offline-export checks passed on Windows, Linux x64, Intel Mac and Apple Silicon Mac in run 39360546983. Workspace recovery/single-instance follow-up passed the frozen Windows runtime and needs its next platform run |
+| macOS and Linux installers | All four targets passed build/runtime/UI/packaging and assembled-app checks in run 39360546983. Workspace recovery, process lease and single-instance follow-up also passed every target in run 39362574205. New verification controls need their next packaged run |
 | License/source distribution completeness | Core notices prepared; full bundled dependency/source inventory outstanding before public release |
-| Rich speed location interface investigation | Public XCTest proxy delivered speed 30.000 m/s, accuracy 0.100 and course 90 at launch in run 39349859427; live updates were ignored. Direct daemon accepted live samples in 39360403594 without observed movement. Independent control in 39361504417 crashed during discovery, so it cannot establish whether transport or observer caused the missed live updates. Corrected control/latest installed iOS simulator run 39362218294 is active. No physical probe has run |
+| Rich speed location interface investigation | Corrected live simulator probe 39362218294 passed: independent simctl control succeeded, then daemon samples delivered 0 -> 30 -> 0 m/s with speed accuracy 0.100/course 90. Shared Waypoint client and isolated XCTest server compiled and delivered moving/stationary samples over loopback in 39363428291; rejection/disconnect status checks failed because the label was absent from the accessibility tree. Persistent status UI and sample-boundary checks prepared for the next run. Production activation, physical delivery and lifecycle remain unverified. No physical probe has run |
 | Life360 recognizes simulated driving activity | Unverified. No supported Core Motion automotive setter identified; coordinate speed alone does not prove drive recognition |
 
 ## Protected-phone constraint
@@ -69,6 +69,6 @@ location setting or installed Waypoint app may be altered.
 - Desktop platform build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39341388486
 - Current simulator launch-order experiment: https://github.com/skdsalfdasds/locus-personal/actions/runs/39348961613
 - Revised cross-platform build: https://github.com/skdsalfdasds/locus-personal/actions/runs/39347865988
-- 77 backend tests and desktop navigation/offline-export/manual-refresh/interruption checks pass locally. Native validation
+- 85 backend tests and desktop navigation/offline-export/manual-refresh/interruption/SMS verification checks pass locally. Native validation
   compiles in release mode. Frozen Windows backend import and protection checks
   use synthetic records and never open a phone service.

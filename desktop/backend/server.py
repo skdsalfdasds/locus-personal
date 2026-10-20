@@ -54,6 +54,7 @@ class Backend:
         self.device_locks = {}
         self.native = None
         self.native_pending = {}
+        self.native_prompts = {}
         self.account = None
         self.native_start_lock = asyncio.Lock()
         self.native_tasks = set()
@@ -130,6 +131,7 @@ class Backend:
         if not engine.is_file():
             raise RuntimeError('The native signing engine is not built yet. Device discovery and IPA editing are available.')
         env = dict(os.environ, WAYPOINT_NATIVE_DATA=str(self.root / 'native'))
+        self.native_prompts.clear()
         self.native = await asyncio.create_subprocess_exec(str(engine), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env)
         for coroutine in (self.read_native(), self.drain_native_errors()):
             task = asyncio.create_task(coroutine)
@@ -140,14 +142,20 @@ class Backend:
         while line := await self.native.stdout.readline():
             try:
                 message = json.loads(line)
-                if 'id' in message and message['id'] in self.native_pending:
-                    future = self.native_pending.pop(message['id'])
-                    if not future.done():
+                if 'id' in message:
+                    for prompt_id,prompt in list(self.native_prompts.items()):
+                        if prompt.get('requestId')==message['id']:
+                            self.native_prompts.pop(prompt_id,None)
+                            self.emit({'event':'promptClosed','promptId':prompt_id})
+                    future = self.native_pending.pop(message['id'],None)
+                    if future and not future.done():
                         if 'error' in message:
                             future.set_exception(RuntimeError(message['error']['message']))
                         else:
                             future.set_result(message['result'])
                 elif 'event' in message:
+                    if message['event']=='prompt' and type(message.get('promptId')) is int:
+                        self.native_prompts[message['promptId']]=message
                     self.emit(message)
             except (ValueError, KeyError):
                 continue
@@ -155,6 +163,10 @@ class Backend:
             if not future.done():
                 future.set_exception(RuntimeError('The native engine exited. Reopen the operation to try again.'))
         self.native_pending.clear()
+        for prompt_id in self.native_prompts:
+            self.emit({'event':'promptClosed','promptId':prompt_id})
+        self.native_prompts.clear()
+        self.account=None
 
     async def drain_native_errors(self):
         # Native diagnostics may contain account context. Do not forward raw stderr.
@@ -377,8 +389,14 @@ class Backend:
             self.account=await self.native_call(method,p)
             return self.account
         if method == 'prompt.reply':
-            await self.ensure_native()
-            self.native.stdin.write((json.dumps({'method':method,'params':p})+'\n').encode());await self.native.stdin.drain()
+            from backend.prompts import verification_answer
+            identifier=p.get('promptId')
+            prompt=self.native_prompts.get(identifier) if type(identifier) is int else None
+            if not prompt or not self.native or self.native.returncode is not None:
+                raise ValueError('This verification prompt has ended. Start sign-in again.')
+            answer=verification_answer(prompt,p.get('answer'))
+            self.native_prompts.pop(identifier,None)
+            self.native.stdin.write((json.dumps({'method':method,'params':{'promptId':identifier,'answer':answer}})+'\n').encode());await self.native.stdin.drain()
             return {'ok':True}
         if method in {'account.logout','account.certificates','account.appIds','identity.import','profile.import','ipa.sign'}:
             result=await self.native_call(method,p)

@@ -53,6 +53,9 @@ async def main():
         try:
             status = await call('system.status')
             assert status['result']['nativeReady']
+            expired=await call('prompt.reply',{'promptId':123,'answer':{'action':'abort'}})
+            assert expired['error']['type']=='ValueError'
+            assert 'has ended' in expired['error']['message']
             recovered=await call('jobs.list')
             assert recovered['result'][0]['status']=='interrupted'
             assert recovered['result'][0]['result']['installed'] is True

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import Setup from './Setup';
-import type { App as InstalledApp, Device, Job, Package, Pairing, Settings, Status } from './types';
+import VerificationForm from './VerificationForm';
+import type { App as InstalledApp, Device, Job, Package, Pairing, Settings, Status, VerificationChallenge, VerificationReply } from './types';
 
 type Page = 'setup'|'sideload'|'applications'|'pairing'|'accounts'|'activity'|'settings';
 const navigation: {id:Page;label:string}[] = [
@@ -50,8 +51,7 @@ export default function App(){
   const [login,setLogin]=useState(false);
   const [email,setEmail]=useState('');
   const [password,setPassword]=useState('');
-  const [prompt,setPrompt]=useState<any>(null);
-  const [code,setCode]=useState('');
+  const [prompt,setPrompt]=useState<VerificationChallenge|null>(null);
   const [certificate,setCertificate]=useState('');
   const [certificatePassword,setCertificatePassword]=useState('');
   const [identityId,setIdentityId]=useState('');
@@ -99,7 +99,8 @@ export default function App(){
   },[device?.id,completedOperations,call]);
   useEffect(()=>window.waypoint?.onEvent(event=>{
     if(event.event==='job')addJob(event.job);
-    if(event.event==='prompt'){setPrompt(event);setCode('');}
+    if(event.event==='prompt'&&event.kind==='twoFactor')setPrompt(event);
+    if(event.event==='promptClosed')setPrompt(current=>current?.promptId===event.promptId?null:current);
     if(event.event==='backendError')setError(event.message);
   }),[]);
   useEffect(()=>{
@@ -110,6 +111,11 @@ export default function App(){
   async function saveSettings(update:Partial<Settings>){
     const settings=await call<Settings>('settings.save',update);
     setStatus(s=>s?{...s,settings}:s);
+  }
+  async function replyToPrompt(challenge:VerificationChallenge,answer:VerificationReply){
+    await call('prompt.reply',{promptId:challenge.promptId,answer});
+    // A replacement challenge can arrive before the IPC acknowledgement.
+    setPrompt(current=>current?.promptId===challenge.promptId?null:current);
   }
   async function loadPackage(path?:string){
     const chosen=path||await window.waypoint?.chooseFile('ipa');if(!chosen)return;
@@ -249,7 +255,7 @@ export default function App(){
     </div>
     {notice&&<div className="toast" role="status">{notice}</div>}
     {login&&<Dialog title="Sign in to Apple" description="Sign applications with a free or paid developer account." onClose={()=>{setLogin(false);setPassword('');}}><form className="form-stack" onSubmit={signIn}><label>Apple account<input type="email" autoComplete="username" required value={email} onChange={e=>setEmail(e.target.value)}/></label><label>Password<input type="password" autoComplete="current-password" required value={password} onChange={e=>setPassword(e.target.value)}/></label><p className="fine-print">The password is passed to the local signing engine and is not saved by this build.</p>{status?.platform==='win32'&&<p className="fine-print">Verification service: {status.settings.anisetteUrl||'Not configured'}</p>}<div className="dialog-actions"><Button type="button" onClick={()=>{setLogin(false);setPage('settings');}}>Signing settings</Button><Button kind="primary" type="submit" disabled={!!busy||(status?.platform==='win32'&&!status.settings.anisetteUrl)}>{busy==='login'?'Signing in…':'Sign in'}</Button></div></form></Dialog>}
-    {prompt&&<Dialog title="Verify your Apple account" description="Enter the code shown on your trusted device." onClose={()=>{call('prompt.reply',{promptId:prompt.promptId,answer:{action:'abort'}});setPrompt(null);}}><form className="form-stack" onSubmit={e=>{e.preventDefault();call('prompt.reply',{promptId:prompt.promptId,answer:{action:'submit',code}});setPrompt(null);setCode('');}}><label>Verification code<input className="verification-code" inputMode="numeric" autoComplete="one-time-code" autoFocus maxLength={6} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,''))}/></label>{prompt.detail?.lastError&&<p className="error-text">{prompt.detail.lastError}</p>}<div className="dialog-actions"><Button type="button" onClick={()=>{call('prompt.reply',{promptId:prompt.promptId,answer:{action:'resend'}});setPrompt(null);}}>Send another code</Button><Button kind="primary" disabled={code.length!==6} type="submit">Verify</Button></div></form></Dialog>}
+    {prompt&&<Dialog title="Verify your Apple account" description="Enter the six-digit code from Apple." onClose={()=>{void replyToPrompt(prompt,{action:'abort'}).catch(error=>setError(error.message));}}><VerificationForm key={prompt.promptId} challenge={prompt} onReply={answer=>replyToPrompt(prompt,answer)}/></Dialog>}
     {!!certificate&&<Dialog title="Import certificate" description="Unlock the .p12 certificate and its private key." onClose={()=>{setCertificate('');setCertificatePassword('');}}><form className="form-stack" onSubmit={importIdentity}><label>Certificate password<input type="password" autoFocus value={certificatePassword} onChange={e=>setCertificatePassword(e.target.value)}/></label><p className="fine-print">Leave blank if the certificate has no password.</p><div className="dialog-actions"><Button kind="primary" type="submit" disabled={!!busy}>{busy?'Importing…':'Import certificate'}</Button></div></form></Dialog>}
     {deleteApp&&<Dialog title={'Uninstall '+deleteApp.name+'?'} description="This removes the application and its local data from the phone." onClose={()=>setDeleteApp(null)}><p className="muted-text">Install updates over an existing app when you need to keep its data.</p><div className="dialog-actions"><Button onClick={()=>setDeleteApp(null)}>Keep application</Button><Button kind="destructive" disabled={blocked||!!busy} onClick={()=>perform('uninstall',async()=>{await call('app.uninstall',{deviceId:deleteApp.deviceId,bundleId:deleteApp.bundleId,confirmation:deleteApp.bundleId});setApps(items=>items.filter(a=>a.bundleId!==deleteApp.bundleId));setDeleteApp(null);setNotice('Application uninstalled.');})}>Uninstall</Button></div></Dialog>}
     {pairTarget&&<Dialog title="Send pairing to an app" description="Transfers the record into the selected app’s Documents folder." onClose={()=>setPairTarget(null)}><div className="form-stack"><label>Application<select value={targetBundle} onChange={e=>{const bundle=e.target.value;setTargetBundle(bundle);setTargetFilename(pairDestinations.find(a=>a.bundleId===bundle)?.recommendedPath||'pairingFile.plist');}}><option value="">Select an application</option>{pairDestinations.map(a=><option key={a.bundleId} value={a.bundleId}>{a.name}</option>)}</select></label><label>Filename<select value={targetFilename} onChange={e=>setTargetFilename(e.target.value)}>{['pairingFile.plist','waypoint-setup-pairing.plist','ALTPairingFile.mobiledevicepairing','rpPairingFile.plist','SideStore/Documents/ALTPairingFile.mobiledevicepairing'].map(name=><option key={name}>{name}</option>)}</select></label><p className="fine-print">Replaces a file with the same name. A Waypoint setup file never replaces an existing saved pairing automatically.</p><div className="dialog-actions"><Button kind="primary" disabled={!targetBundle||blocked||!!busy} onClick={()=>perform('transfer',async()=>{await call('pairing.install',{deviceId:device?.id,bundleId:targetBundle,pairingId:pairTarget.id,filename:targetFilename});setPairTarget(null);setNotice('Pairing record transferred.');})}>Send pairing</Button></div></div></Dialog>}

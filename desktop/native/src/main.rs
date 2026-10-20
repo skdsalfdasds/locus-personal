@@ -98,7 +98,7 @@ async fn dispatch(id: &Value, method: &str, p: &Value, data: &Path, session: &mu
             let anisette=p["anisetteUrl"].as_str().unwrap_or(api::BUILTIN_ANISETTE);
             progress(id,"Contacting Apple to sign in.");
             let (signed_in,info)=api::sign_in(email,password,anisette,&data.join("signing"),|params| {
-                let answer=ask(id,replies,"twoFactor",json!({"lastError":params.last_error,"smsAvailable":params.sms,"numbers":params.numbers}));
+                let answer=ask(id,replies,"twoFactor",json!({"lastError":params.last_error,"sms":params.sms,"unknown":params.unknown,"selectedNumberId":params.selected_number_id,"numbers":params.numbers}));
                 match answer["action"].as_str(){
                     Some("submit")=>TwoFactorCallbackResponse::SubmitCode(answer["code"].as_str().unwrap_or("").to_string()),
                     Some("sms")=>TwoFactorCallbackResponse::SendSms(answer["numberId"].as_u64().unwrap_or(0) as u32),

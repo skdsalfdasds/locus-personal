@@ -31,12 +31,16 @@ struct ProbeApp: App {
                                 .accessibilityIdentifier("relay-stationary")
                             Button("Try unauthorized relay sample") { observer.relay(speed: 90, latitude: 38, unauthorized: true) }
                                 .accessibilityIdentifier("relay-unauthorized")
-                            Text(observer.relaySummary).accessibilityIdentifier("relay-status")
                         }
                         Text("This app observes iOS location and motion. Explicit relay buttons send test samples to the separate XCTest runner. No motion activity setter is used.")
                         Text("Observations are stored locally in Documents/location-observations.jsonl. They can contain location data.")
                     }
                 }.navigationTitle("Waypoint Probe")
+                    .safeAreaInset(edge: .bottom) {
+                        Text(observer.relaySummary).font(.footnote).padding(8)
+                            .frame(maxWidth: .infinity).background(.bar)
+                            .accessibilityIdentifier("relay-status")
+                    }
             }
         }
     }

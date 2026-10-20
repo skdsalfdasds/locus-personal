@@ -4,12 +4,13 @@ const { _electron } = require('playwright');
 const path = require('node:path');
 const fs = require('node:fs');
 
-test('desktop navigation and protected-device controls', {timeout:60000}, async () => {
+test('desktop navigation and protected-device controls', {timeout:120000}, async () => {
   const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
   if(process.env.CI)env.DEBUG='pw:browser*';
   const application=await _electron.launch({args:[path.join(__dirname,'..'),...(process.env.CI&&process.platform==='linux'?['--no-sandbox']:[])],env,timeout:20000});
   try {
     const page=await application.firstWindow({timeout:20000});
+    page.setDefaultTimeout(8000);
     await page.getByRole('heading',{name:'Install Waypoint',exact:true}).waitFor();
     await page.waitForFunction(()=>document.querySelector('.statusbar')?.textContent.includes('Device service online'));
     // A machine without Apple device drivers must still run the desktop UI.
@@ -58,7 +59,7 @@ test('desktop navigation and protected-device controls', {timeout:60000}, async 
       for(const channel of ['waypoint:call','waypoint:choose','waypoint:save'])ipcMain.removeHandler(channel);
       ipcMain.handle('waypoint:choose',()=>'/synthetic.ipa');
       ipcMain.handle('waypoint:save',()=>'/synthetic-export.ipa');
-      ipcMain.handle('waypoint:call',async(_,method,params)=>{
+      ipcMain.handle('waypoint:call',async(event,method,params)=>{
         global.waypointTestCalls.push({method,params});
         if(method==='system.status')return {version:'0.1.0',platform:'win32',nativeReady:true,account:global.waypointTestManaged?{email:'test@example.invalid'}:null,settings:{theme:'light',hideSensitive:true}};
         if(method==='devices.list'){
@@ -72,6 +73,19 @@ test('desktop navigation and protected-device controls', {timeout:60000}, async 
         if(method==='ipa.inspect')return {path:'/synthetic.ipa',filename:'synthetic.ipa',name:'Synthetic app',version:'1.0',size:1024,extensions:[],bundleId:'org.example.synthetic'};
         if(method==='ipa.exportSigned')return {signatureMode:'adhoc',appleProvisioned:false};
         if(method==='app.refresh')return {id:'synthetic-refresh',name:'Refresh synthetic app',status:'queued',stage:'Waiting',started:new Date().toISOString(),progress:null,logs:[],deviceId:'synthetic-phone'};
+        if(method==='testing.replyComplete')return !!global.waypointTestReplyComplete;
+        if(method==='prompt.reply'){
+          if(global.waypointTestReplyFailure){global.waypointTestReplyFailure=false;throw Error('Synthetic verification connection failed');}
+          if(params.promptId===41&&params.answer.action==='sms'){
+            global.waypointTestReplyComplete=false;
+            event.sender.send('waypoint:event',{event:'prompt',kind:'twoFactor',promptId:42,
+              detail:{lastError:'Synthetic replacement challenge',sms:true,selectedNumberId:8,numbers:[{id:8,lastTwoDigits:'98'}]}});
+            // Deliberately deliver a replacement before the previous reply's ACK.
+            await new Promise(resolve=>setTimeout(resolve,100));
+            global.waypointTestReplyComplete=true;
+          }
+          return {ok:true};
+        }
         throw Error('Unexpected preview operation: '+method);
       });
     });
@@ -100,11 +114,52 @@ test('desktop navigation and protected-device controls', {timeout:60000}, async 
     await page.getByRole('heading',{name:'Activity',exact:true,level:1}).waitFor();
     const refreshed=await application.evaluate(()=>global.waypointTestCalls.find(call=>call.method==='app.refresh'));
     assert.deepEqual(refreshed.params,{libraryId:'synthetic-managed-app'});
+    async function prompt(identifier,detail={}){
+      await application.evaluate(({BrowserWindow},{identifier,detail})=>{
+        BrowserWindow.getAllWindows()[0].webContents.send('waypoint:event',{
+          event:'prompt',kind:'twoFactor',promptId:identifier,detail});
+      },{identifier,detail});
+      await page.getByRole('dialog').getByRole('heading',{name:'Verify your Apple account',exact:true}).waitFor();
+    }
+    await application.evaluate(()=>{global.waypointTestReplyFailure=true;});
+    await prompt(41,{numbers:[{id:7,lastTwoDigits:'12'}],selectedNumberId:7});
+    const dialog=page.getByRole('dialog');
+    assert.equal(await dialog.getByRole('button',{name:'Verify',exact:true}).isDisabled(),true);
+    await dialog.getByLabel('Verification code',{exact:true}).fill('001234');
+    await dialog.getByRole('button',{name:'Verify',exact:true}).click();
+    await dialog.getByRole('alert').filter({hasText:'Synthetic verification connection failed'}).waitFor();
+    assert.equal(await dialog.getByLabel('Verification code',{exact:true}).inputValue(),'001234');
+    await dialog.getByText('Other verification options',{exact:true}).click();
+    await dialog.getByLabel('Trusted phone number',{exact:true}).selectOption('7');
+    await dialog.getByRole('button',{name:'Send text message',exact:true}).click();
+    await dialog.getByRole('alert').filter({hasText:'Synthetic replacement challenge'}).waitFor();
+    await page.waitForFunction(()=>window.waypoint.call('testing.replyComplete'));
+    assert.equal(await dialog.isVisible(),true,'Acknowledging the previous prompt must not close its replacement');
+    assert.equal(await dialog.getByLabel('Verification code',{exact:true}).inputValue(),'');
+    await dialog.getByLabel('Verification code',{exact:true}).fill('007654');
+    await dialog.getByRole('button',{name:'Verify',exact:true}).click();
+    await dialog.waitFor({state:'detached'});
+    for(const [identifier,label,action] of [[43,'Send another code','resend'],[44,'Send to trusted Apple devices','devices'],[45,'Close','abort']]){
+      await prompt(identifier);
+      if(action==='devices')await dialog.getByText('Other verification options',{exact:true}).click();
+      await dialog.getByRole('button',{name:label,exact:true}).click();
+      await dialog.waitFor({state:'detached'});
+    }
+    const replies=await application.evaluate(()=>global.waypointTestCalls.filter(call=>call.method==='prompt.reply').map(call=>call.params));
+    assert.deepEqual(replies.slice(-5),[
+      {promptId:41,answer:{action:'sms',numberId:7}},
+      {promptId:42,answer:{action:'submit',code:'007654'}},
+      {promptId:43,answer:{action:'resend'}},
+      {promptId:44,answer:{action:'devices'}},
+      {promptId:45,answer:{action:'abort'}}]);
   }catch(error){
-    if(process.env.CI){
+    {
       const page=application.windows()[0];
       fs.mkdirSync(path.join(__dirname,'../outputs'),{recursive:true});
       if(page&&!page.isClosed())await page.screenshot({path:path.join(__dirname,'../outputs/desktop-failure.png'),animations:'disabled'}).catch(()=>{});
+      const prompts=page&&!page.isClosed()?await page.getByRole('dialog').allTextContents().catch(()=>[]):[];
+      const methods=await application.evaluate(()=>global.waypointTestCalls?.map(call=>({method:call.method,promptId:call.params?.promptId}))).catch(()=>[]);
+      fs.writeFileSync(path.join(__dirname,'../outputs/desktop-failure-context.json'),JSON.stringify({prompts,methods},null,2));
     }
     throw error;
   }finally{

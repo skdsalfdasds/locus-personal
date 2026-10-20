@@ -99,10 +99,11 @@ final class LocationInterfaceTests: XCTestCase {
         app.buttons["relay-unauthorized"].tap()
         let rejected = expectation(for: NSPredicate(format: "label CONTAINS %@", "Session authorization failed"),
                                    evaluatedWith: app.staticTexts["relay-status"])
-        XCTAssertEqual(XCTWaiter.wait(for: [rejected], timeout: 10), .completed)
+        let rejection = XCTWaiter.wait(for: [rejected], timeout: 10)
+        XCTAssertEqual(rejection, .completed)
         XCTAssertTrue(app.staticTexts["observed-location"].label.hasPrefix("37.337100"),
                       "An unauthorized client changed the override")
-        print("WAYPOINT_RELAY_UNAUTHORIZED rejected=true")
+        print("WAYPOINT_RELAY_UNAUTHORIZED rejected=\(rejection == .completed) status=\(app.staticTexts["relay-status"].label)")
 
         app.buttons["relay-stationary"].tap()
         XCTAssertTrue(waitForCoordinate("37.338100", in: app), "Relay stop did not preserve the requested position")
@@ -113,9 +114,10 @@ final class LocationInterfaceTests: XCTestCase {
         app.buttons["relay-cruise"].tap()
         let disconnected = expectation(for: NSPredicate(format: "label CONTAINS %@", "relay is unavailable"),
                                        evaluatedWith: app.staticTexts["relay-status"])
-        XCTAssertEqual(XCTWaiter.wait(for: [disconnected], timeout: 15), .completed)
+        let connectionLost = XCTWaiter.wait(for: [disconnected], timeout: 15)
+        XCTAssertEqual(connectionLost, .completed)
         XCTAssertTrue(app.staticTexts["observed-location"].label.hasPrefix("37.338100"),
                       "Disconnecting the relay cleared or changed the held position")
-        print("WAYPOINT_RELAY_DISCONNECT heldCoordinate=true")
+        print("WAYPOINT_RELAY_DISCONNECT unavailable=\(connectionLost == .completed) heldCoordinate=\(app.staticTexts["observed-location"].label.hasPrefix("37.338100"))")
     }
 }
